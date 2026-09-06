@@ -1,0 +1,133 @@
+[
+  {
+    "type": "io.input",
+    "category": "io",
+    "title": "Entrada (chat/voz)",
+    "description": "Entrada conversacional. Determina el target chat-service.",
+    "ports": { "outputs": [{ "name": "Message", "type": "Message" }] },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "channel": { "type": "string", "enum": ["chat", "voice"], "default": "chat", "title": "Canal" },
+        "auth": { "type": "string", "enum": ["none", "jwt", "booking-token"], "default": "none", "title": "Autenticación" },
+        "streaming": { "type": "boolean", "default": true, "title": "Streaming" }
+      }
+    },
+    "emitter": "io.input",
+    "mock": { "behavior": "passthrough_message" }
+  },
+  {
+    "type": "io.stt",
+    "category": "io",
+    "title": "Speech-to-Text",
+    "description": "Transcribe voz en streaming antes del chat.",
+    "ports": {
+      "inputs": [{ "name": "Audio", "type": "Audio" }],
+      "outputs": [{ "name": "Message", "type": "Message" }]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "provider": { "type": "string", "enum": ["transcribe", "deepgram"], "default": "deepgram", "title": "Proveedor STT" },
+        "language": { "type": "string", "default": "es", "title": "Idioma" }
+      }
+    },
+    "secrets": ["STT_API_KEY"],
+    "emitter": "io.stt",
+    "mock": { "behavior": "stt_transcript" }
+  },
+  {
+    "type": "io.event-source",
+    "category": "io",
+    "title": "Fuente de eventos (Kafka)",
+    "description": "Consume eventos de un stream. Determina el target event-worker.",
+    "ports": { "outputs": [{ "name": "Event", "type": "Event" }] },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "broker": { "type": "string", "default": "kafka", "title": "Broker" },
+        "topic": { "type": "string", "title": "Topic" },
+        "partitionKey": { "type": "string", "title": "Clave de partición" },
+        "exactlyOnce": { "type": "boolean", "default": true, "title": "Exactly-once" }
+      }
+    },
+    "emitter": "io.event-source",
+    "mock": { "behavior": "emit_events" }
+  },
+  {
+    "type": "io.trigger",
+    "category": "io",
+    "title": "Disparador durable",
+    "description": "Disparador durable. Determina el target temporal.",
+    "ports": { "outputs": [{ "name": "Message", "type": "Message" }] },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "schedule": { "type": "string", "title": "Cron (opcional)" },
+        "idempotencyKey": { "type": "string", "title": "Clave de idempotencia" }
+      }
+    },
+    "emitter": "io.trigger",
+    "mock": { "behavior": "passthrough_message" }
+  },
+  {
+    "type": "io.batch",
+    "category": "io",
+    "title": "Lote / cron",
+    "description": "Lote de archivos o cron. Determina el target batch.",
+    "ports": { "outputs": [{ "name": "Documents", "type": "Documents" }] },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "source": { "type": "string", "title": "Fuente (carpeta/bucket)" },
+        "glob": { "type": "string", "default": "**/*.pdf", "title": "Patrón de archivos" }
+      }
+    },
+    "emitter": "io.batch",
+    "mock": { "behavior": "emit_documents" }
+  },
+  {
+    "type": "io.output",
+    "category": "io",
+    "title": "Salida",
+    "description": "Salida final al usuario/sistema.",
+    "ports": { "inputs": [{ "name": "Any", "type": "Any" }] },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "format": { "type": "string", "enum": ["text", "markdown", "json"], "default": "markdown", "title": "Formato" },
+        "streaming": { "type": "boolean", "default": true, "title": "Streaming" }
+      }
+    },
+    "emitter": "io.output",
+    "mock": { "behavior": "collect_output" }
+  },
+  {
+    "type": "io.notify",
+    "category": "io",
+    "title": "Notificación",
+    "description": "Notificación saliente (email/SMS/push).",
+    "ports": { "inputs": [{ "name": "Any", "type": "Any" }] },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "channels": { "type": "array", "items": { "type": "string", "enum": ["email", "sms", "push"] }, "default": ["email"], "title": "Canales" }
+      }
+    },
+    "emitter": "io.notify",
+    "mock": { "behavior": "record_notify" }
+  },
+  {
+    "type": "io.panel",
+    "category": "io",
+    "title": "Panel lateral (copilot)",
+    "description": "Sugerencia a UI lateral sin interrumpir.",
+    "ports": { "inputs": [{ "name": "Any", "type": "Any" }] },
+    "configSchema": {
+      "type": "object",
+      "properties": { "cite": { "type": "boolean", "default": true, "title": "Mostrar cita" } }
+    },
+    "emitter": "io.panel",
+    "mock": { "behavior": "collect_output" }
+  }
+]

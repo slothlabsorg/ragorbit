@@ -1,0 +1,315 @@
+{
+  "irVersion": "1.0",
+  "flow": {
+    "id": "banking-credit-scoring",
+    "name": "Evaluación de potencial de crédito",
+    "description": "Batch que ingiere declaraciones, estados de cuenta y datos financieros de un solicitante, construye un vector store, y produce una decisión estructurada con score, factores y citas a los documentos fuente.",
+    "deploymentTarget": "batch",
+    "defaults": {
+      "llm": "anthropic:claude-opus-4-8"
+    }
+  },
+  "nodes": [
+    {
+      "id": "batch_source",
+      "type": "io.batch",
+      "label": "FuenteLote",
+      "config": {
+        "source": "data/applicants/",
+        "glob": "**/*.{pdf,csv}"
+      },
+      "position": {
+        "x": 80,
+        "y": 300
+      }
+    },
+    {
+      "id": "pdf_loader",
+      "type": "loader.pdf",
+      "label": "CargadorPDF",
+      "config": {
+        "path": "data/applicants/",
+        "ocr": false
+      },
+      "position": {
+        "x": 300,
+        "y": 180
+      }
+    },
+    {
+      "id": "tabular_loader",
+      "type": "loader.tabular",
+      "label": "CargadorCSV",
+      "config": {
+        "path": "data/applicants/",
+        "schemaHint": "financial_data"
+      },
+      "position": {
+        "x": 300,
+        "y": 420
+      }
+    },
+    {
+      "id": "chunker",
+      "type": "ingest.chunker",
+      "label": "Troceador",
+      "config": {
+        "strategy": "by-section",
+        "chunkSize": 800,
+        "overlap": 120
+      },
+      "position": {
+        "x": 540,
+        "y": 300
+      }
+    },
+    {
+      "id": "metadata_tagger",
+      "type": "ingest.metadata",
+      "label": "EtiquetadorMetadata",
+      "config": {
+        "fields": [
+          "doc_type",
+          "period"
+        ]
+      },
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "embedder",
+      "type": "model.embedding",
+      "label": "ModeloEmbedding",
+      "config": {
+        "model": "text-embedding-3-large",
+        "local": false,
+        "apiKeyRef": "OPENAI_API_KEY"
+      },
+      "position": {
+        "x": 940,
+        "y": 300
+      }
+    },
+    {
+      "id": "vector_store",
+      "type": "store.pgvector",
+      "label": "AlmacénVectorial",
+      "config": {
+        "index": "credit_docs",
+        "distance": "cosine"
+      },
+      "position": {
+        "x": 1140,
+        "y": 300
+      }
+    },
+    {
+      "id": "retriever",
+      "type": "retrieval.vector",
+      "label": "RecuperadorCredito",
+      "config": {
+        "topK": 6,
+        "hardFilters": [
+          "doc_type",
+          "period"
+        ]
+      },
+      "position": {
+        "x": 1340,
+        "y": 300
+      }
+    },
+    {
+      "id": "llm",
+      "type": "model.llm",
+      "label": "ModeloLLM",
+      "config": {
+        "model": "anthropic:claude-opus-4-8",
+        "temperature": 0.1,
+        "apiKeyRef": "ANTHROPIC_API_KEY"
+      },
+      "position": {
+        "x": 1340,
+        "y": 500
+      }
+    },
+    {
+      "id": "structured_decision",
+      "type": "logic.structured",
+      "label": "DecisiónEstructurada",
+      "config": {
+        "schema": {
+          "type": "object",
+          "required": [
+            "score",
+            "decision",
+            "factores",
+            "justificacion"
+          ],
+          "properties": {
+            "score": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Score de crédito del solicitante (0-100)"
+            },
+            "decision": {
+              "type": "string",
+              "enum": [
+                "aprobar",
+                "revisar",
+                "rechazar"
+              ],
+              "description": "Recomendación preliminar del LLM"
+            },
+            "factores": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Factores clave que fundamentan el score"
+            },
+            "justificacion": {
+              "type": "string",
+              "description": "Razonamiento detallado con referencias a los documentos"
+            }
+          }
+        },
+        "requireCitations": true
+      },
+      "position": {
+        "x": 1560,
+        "y": 400
+      }
+    },
+    {
+      "id": "rules_engine",
+      "type": "logic.rules",
+      "label": "MotorReglas",
+      "config": {
+        "rules": [
+          {
+            "when": "score >= 70",
+            "then": "decision = 'aprobar'"
+          },
+          {
+            "when": "score >= 40 && score < 70",
+            "then": "decision = 'revisar'"
+          }
+        ],
+        "else": "decision = 'rechazar'"
+      },
+      "position": {
+        "x": 1780,
+        "y": 400
+      }
+    },
+    {
+      "id": "output",
+      "type": "io.output",
+      "label": "SalidaJSON",
+      "config": {
+        "format": "json",
+        "streaming": false
+      },
+      "position": {
+        "x": 1980,
+        "y": 400
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "pdf_loader",
+      "sourcePort": "documents",
+      "target": "chunker",
+      "targetPort": "documents"
+    },
+    {
+      "source": "tabular_loader",
+      "sourcePort": "documents",
+      "target": "chunker",
+      "targetPort": "documents"
+    },
+    {
+      "source": "chunker",
+      "sourcePort": "documents",
+      "target": "metadata_tagger",
+      "targetPort": "documents"
+    },
+    {
+      "source": "metadata_tagger",
+      "sourcePort": "documents",
+      "target": "vector_store",
+      "targetPort": "documents"
+    },
+    {
+      "source": "embedder",
+      "sourcePort": "embeddings",
+      "target": "vector_store",
+      "targetPort": "embeddings"
+    },
+    {
+      "source": "vector_store",
+      "sourcePort": "retriever",
+      "target": "retriever",
+      "targetPort": "retriever"
+    },
+    {
+      "source": "retriever",
+      "sourcePort": "chunks",
+      "target": "structured_decision",
+      "targetPort": "chunks"
+    },
+    {
+      "source": "llm",
+      "sourcePort": "model",
+      "target": "structured_decision",
+      "targetPort": "model"
+    },
+    {
+      "source": "structured_decision",
+      "sourcePort": "decision",
+      "target": "rules_engine",
+      "targetPort": "input"
+    },
+    {
+      "source": "rules_engine",
+      "sourcePort": "decision",
+      "target": "output",
+      "targetPort": "input"
+    },
+    {
+      "source": "batch_source",
+      "sourcePort": "Documents",
+      "target": "chunker",
+      "targetPort": "Documents",
+      "loop": false
+    }
+  ],
+  "secrets": [
+    {
+      "name": "ANTHROPIC_API_KEY",
+      "required": true,
+      "usedBy": [
+        "llm"
+      ]
+    },
+    {
+      "name": "OPENAI_API_KEY",
+      "required": true,
+      "usedBy": [
+        "embedder"
+      ]
+    },
+    {
+      "name": "DATABASE_URL",
+      "required": true,
+      "usedBy": [
+        "vector_store"
+      ]
+    }
+  ]
+}

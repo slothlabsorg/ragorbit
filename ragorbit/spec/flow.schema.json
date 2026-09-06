@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ragorbit.dev/schemas/flow.schema.json",
+  "title": "RAGorbit Flow IR",
+  "description": "Especificación portable de una estrategia RAG/agéntica. Fuente de verdad. Ver docs/01-concepts.md.",
+  "type": "object",
+  "required": ["irVersion", "flow", "nodes", "edges"],
+  "additionalProperties": false,
+  "properties": {
+    "irVersion": { "type": "string", "const": "1.0" },
+    "flow": {
+      "type": "object",
+      "required": ["id", "name", "deploymentTarget"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "version": { "type": "string" },
+        "deploymentTarget": {
+          "type": "string",
+          "enum": ["chat-service", "event-worker", "batch", "temporal"]
+        },
+        "defaults": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": { "llm": { "type": "string" } }
+        }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type"],
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string", "pattern": "^[a-z]+\\.[a-z0-9-]+$" },
+          "label": { "type": "string" },
+          "config": { "type": "object" },
+          "position": {
+            "type": "object",
+            "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
+          }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source", "sourcePort", "target", "targetPort"],
+        "additionalProperties": true,
+        "properties": {
+          "source": { "type": "string" },
+          "sourcePort": { "type": "string" },
+          "target": { "type": "string" },
+          "targetPort": { "type": "string" },
+          "loop": { "type": "boolean", "default": false }
+        }
+      }
+    },
+    "secrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "required": { "type": "boolean", "default": true },
+          "usedBy": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

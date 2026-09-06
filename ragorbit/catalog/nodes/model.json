@@ -1,0 +1,83 @@
+[
+  {
+    "type": "model.llm",
+    "category": "model",
+    "title": "LLM",
+    "description": "LLM vía interfaz estándar (init_chat_model). Produce un puerto Model para nodos de síntesis.",
+    "ports": {
+      "outputs": [{ "name": "Model", "type": "Model" }]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "model": { "type": "string", "default": "anthropic:claude-opus-4-8", "title": "Modelo" },
+        "temperature": { "type": "number", "default": 0.2, "title": "Temperatura" },
+        "apiKeyRef": { "type": "string", "default": "ANTHROPIC_API_KEY", "title": "Referencia de API Key" }
+      }
+    },
+    "secrets": ["ANTHROPIC_API_KEY"],
+    "emitter": "model.llm",
+    "mock": { "behavior": "llm" }
+  },
+  {
+    "type": "model.embedding",
+    "category": "model",
+    "title": "Modelo de Embeddings",
+    "description": "Modelo de embeddings. Produce Embeddings para almacenamiento y recuperación.",
+    "ports": {
+      "outputs": [{ "name": "Embeddings", "type": "Embeddings" }]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "model": { "type": "string", "default": "text-embedding-3-large", "title": "Modelo" },
+        "local": { "type": "boolean", "default": false, "title": "Local" },
+        "apiKeyRef": { "type": "string", "title": "Referencia de API Key" }
+      }
+    },
+    "emitter": "model.embedding",
+    "mock": { "behavior": "embed" }
+  },
+  {
+    "type": "model.vision",
+    "category": "model",
+    "title": "Modelo Multimodal (Vision)",
+    "description": "Modelo multimodal para describir imágenes y diagramas. Produce un puerto Model.",
+    "ports": {
+      "outputs": [{ "name": "Model", "type": "Model" }]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "model": { "type": "string", "default": "anthropic:claude-opus-4-8", "title": "Modelo" },
+        "apiKeyRef": { "type": "string", "default": "ANTHROPIC_API_KEY", "title": "Referencia de API Key" }
+      }
+    },
+    "secrets": ["ANTHROPIC_API_KEY"],
+    "emitter": "model.vision",
+    "mock": { "behavior": "vision" }
+  },
+  {
+    "type": "model.intent",
+    "category": "model",
+    "title": "Clasificador de Intención",
+    "description": "Clasificador ligero (compuerta del RAG; barato y rápido). Clasifica el mensaje y produce Query y Decision.",
+    "ports": {
+      "inputs": [{ "name": "Message", "type": "Message" }],
+      "outputs": [
+        { "name": "Query", "type": "Query" },
+        { "name": "Decision", "type": "Decision" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "labels": { "type": "array", "items": { "type": "string" }, "title": "Etiquetas" },
+        "backend": { "type": "string", "enum": ["embeddings", "small-llm"], "default": "embeddings", "title": "Backend" },
+        "threshold": { "type": "number", "default": 0.6, "title": "Umbral" }
+      }
+    },
+    "emitter": "model.intent",
+    "mock": { "behavior": "intent" }
+  }
+]

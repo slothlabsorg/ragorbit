@@ -1,0 +1,373 @@
+{
+  "irVersion": "1.0",
+  "flow": {
+    "id": "telecom-callcenter-copilot",
+    "name": "Copilot para agentes de call center — Telecom",
+    "description": "Transcribe la llamada del cliente en streaming, detecta si el fragmento es accionable, normaliza la jerga interna, recupera el índice correcto (policy/procedure/faq), reordena por relevancia, sintetiza una respuesta corta citada y la muestra en el panel del agente humano sin interrumpir la llamada. El agente marca útil/no-útil para mejorar el reranker.",
+    "deploymentTarget": "chat-service",
+    "defaults": {
+      "llm": "anthropic:claude-opus-4-8"
+    }
+  },
+  "nodes": [
+    {
+      "id": "stt",
+      "type": "io.stt",
+      "label": "STT Deepgram (streaming)",
+      "config": {
+        "provider": "deepgram",
+        "language": "es"
+      },
+      "position": {
+        "x": 60,
+        "y": 300
+      }
+    },
+    {
+      "id": "intent",
+      "type": "model.intent",
+      "label": "Clasificador de intención",
+      "config": {
+        "labels": [
+          "facturacion",
+          "soporte_tecnico",
+          "no_accionable"
+        ],
+        "backend": "embeddings",
+        "threshold": 0.6
+      },
+      "position": {
+        "x": 300,
+        "y": 300
+      }
+    },
+    {
+      "id": "rewrite",
+      "type": "query.rewrite",
+      "label": "Normalización de jerga",
+      "config": {
+        "glossaryRef": "telecom-internal-glossary",
+        "expand": true
+      },
+      "position": {
+        "x": 540,
+        "y": 300
+      }
+    },
+    {
+      "id": "policy_loader",
+      "type": "loader.pdf",
+      "label": "Loader — Regulaciones / Policy",
+      "config": {
+        "bucket": "s3://telecom-docs/policy",
+        "ocr": false
+      },
+      "position": {
+        "x": 60,
+        "y": 600
+      }
+    },
+    {
+      "id": "procedure_loader",
+      "type": "loader.pdf",
+      "label": "Loader — Procedimientos internos",
+      "config": {
+        "bucket": "s3://telecom-docs/procedure",
+        "ocr": false
+      },
+      "position": {
+        "x": 260,
+        "y": 600
+      }
+    },
+    {
+      "id": "faq_loader",
+      "type": "loader.web",
+      "label": "Loader — FAQ públicas",
+      "config": {
+        "urls": [
+          "https://intranet.telecom.internal/faq"
+        ],
+        "crawlDepth": 1
+      },
+      "position": {
+        "x": 460,
+        "y": 600
+      }
+    },
+    {
+      "id": "embedding_model",
+      "type": "model.embedding",
+      "label": "Embeddings locales",
+      "config": {
+        "model": "text-embedding-3-large",
+        "local": true,
+        "apiKeyRef": "OPENAI_API_KEY"
+      },
+      "position": {
+        "x": 660,
+        "y": 480
+      }
+    },
+    {
+      "id": "multi_index",
+      "type": "store.multi-index",
+      "label": "Multi-Index (policy / procedure / faq)",
+      "config": {
+        "indexes": [
+          "policy",
+          "procedure",
+          "faq"
+        ]
+      },
+      "position": {
+        "x": 860,
+        "y": 600
+      }
+    },
+    {
+      "id": "router",
+      "type": "retrieval.router",
+      "label": "Router por keyword / intent",
+      "config": {
+        "rules": [
+          {
+            "keyword": "facturacion",
+            "index": "policy"
+          },
+          {
+            "keyword": "soporte_tecnico",
+            "index": "procedure"
+          },
+          {
+            "keyword": "faq",
+            "index": "faq"
+          }
+        ],
+        "fallback": "faq"
+      },
+      "position": {
+        "x": 780,
+        "y": 300
+      }
+    },
+    {
+      "id": "reranker",
+      "type": "retrieval.reranker",
+      "label": "Reranker top-3",
+      "config": {
+        "model": "bge-reranker",
+        "topN": 3,
+        "feedbackRef": "feedback_store"
+      },
+      "position": {
+        "x": 1020,
+        "y": 300
+      }
+    },
+    {
+      "id": "llm",
+      "type": "model.llm",
+      "label": "Claude Opus 4.8",
+      "config": {
+        "model": "anthropic:claude-opus-4-8",
+        "temperature": 0.2,
+        "apiKeyRef": "ANTHROPIC_API_KEY"
+      },
+      "position": {
+        "x": 1020,
+        "y": 140
+      }
+    },
+    {
+      "id": "synthesis",
+      "type": "logic.prompt",
+      "label": "Síntesis de respuesta corta",
+      "config": {
+        "template": "Eres un copilot para agentes de call center de telecomunicaciones. Con base en los fragmentos recuperados, redacta una sugerencia concisa (máximo 3 oraciones) que el agente pueda leer en segundos. Usa solo la información de los fragmentos; no inventes datos.",
+        "system": "Responde siempre en español. Sé directo y preciso."
+      },
+      "position": {
+        "x": 1260,
+        "y": 300
+      }
+    },
+    {
+      "id": "citations",
+      "type": "logic.citations",
+      "label": "Garantía de citas",
+      "config": {
+        "mode": "enforce"
+      },
+      "position": {
+        "x": 1500,
+        "y": 300
+      }
+    },
+    {
+      "id": "panel",
+      "type": "io.panel",
+      "label": "Panel lateral del agente",
+      "config": {
+        "cite": true
+      },
+      "position": {
+        "x": 1740,
+        "y": 300
+      }
+    },
+    {
+      "id": "feedback",
+      "type": "observability.feedback",
+      "label": "Feedback — útil / no útil",
+      "config": {
+        "store": "feedback_store",
+        "signals": [
+          "thumbs"
+        ]
+      },
+      "position": {
+        "x": 1740,
+        "y": 500
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "stt",
+      "sourcePort": "Message",
+      "target": "intent",
+      "targetPort": "Message",
+      "loop": false
+    },
+    {
+      "source": "intent",
+      "sourcePort": "Query",
+      "target": "rewrite",
+      "targetPort": "Message",
+      "loop": false
+    },
+    {
+      "source": "rewrite",
+      "sourcePort": "Query",
+      "target": "router",
+      "targetPort": "Query",
+      "loop": false
+    },
+    {
+      "source": "policy_loader",
+      "sourcePort": "Documents",
+      "target": "multi_index",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "procedure_loader",
+      "sourcePort": "Documents",
+      "target": "multi_index",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "faq_loader",
+      "sourcePort": "Documents",
+      "target": "multi_index",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "multi_index",
+      "sourcePort": "Retriever",
+      "target": "router",
+      "targetPort": "Retriever",
+      "loop": false
+    },
+    {
+      "source": "router",
+      "sourcePort": "Chunks",
+      "target": "reranker",
+      "targetPort": "Chunks",
+      "loop": false
+    },
+    {
+      "source": "reranker",
+      "sourcePort": "Chunks",
+      "target": "synthesis",
+      "targetPort": "Chunks",
+      "loop": false
+    },
+    {
+      "source": "llm",
+      "sourcePort": "Model",
+      "target": "synthesis",
+      "targetPort": "Model",
+      "loop": false
+    },
+    {
+      "source": "synthesis",
+      "sourcePort": "Message",
+      "target": "citations",
+      "targetPort": "Message",
+      "loop": false
+    },
+    {
+      "source": "reranker",
+      "sourcePort": "Chunks",
+      "target": "citations",
+      "targetPort": "Chunks",
+      "loop": false
+    },
+    {
+      "source": "citations",
+      "sourcePort": "Message",
+      "target": "panel",
+      "targetPort": "Any",
+      "loop": false
+    },
+    {
+      "source": "panel",
+      "sourcePort": "Any",
+      "target": "feedback",
+      "targetPort": "Any",
+      "loop": false
+    },
+    {
+      "source": "feedback",
+      "sourcePort": "Any",
+      "target": "reranker",
+      "targetPort": "Chunks",
+      "loop": true
+    }
+  ],
+  "secrets": [
+    {
+      "name": "DEEPGRAM_API_KEY",
+      "required": true,
+      "usedBy": [
+        "stt"
+      ]
+    },
+    {
+      "name": "ANTHROPIC_API_KEY",
+      "required": true,
+      "usedBy": [
+        "llm"
+      ]
+    },
+    {
+      "name": "OPENAI_API_KEY",
+      "required": true,
+      "usedBy": [
+        "embedding_model"
+      ]
+    },
+    {
+      "name": "STORAGE_KEY",
+      "required": true,
+      "usedBy": [
+        "policy_loader",
+        "procedure_loader"
+      ]
+    }
+  ]
+}

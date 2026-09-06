@@ -1,0 +1,337 @@
+{
+  "irVersion": "1.0",
+  "flow": {
+    "id": "insurance-claims",
+    "name": "Adjudicación de reclamos de seguros",
+    "description": "Procesa un reclamo de seguro (póliza PDF + fotos de daños) extrayendo tablas de cobertura, describiendo los daños por visión, aplicando reglas deterministas de elegibilidad y emitiendo una decisión estructurada con cita a la cláusula aplicable.",
+    "deploymentTarget": "batch",
+    "defaults": {
+      "llm": "anthropic:claude-opus-4-8"
+    }
+  },
+  "nodes": [
+    {
+      "id": "batch_input",
+      "type": "io.batch",
+      "label": "Carpeta de Reclamo",
+      "config": {
+        "source": "s3://insurance-claims/incoming",
+        "glob": "**/*.{pdf,jpg,jpeg,png}"
+      },
+      "position": {
+        "x": 60,
+        "y": 300
+      }
+    },
+    {
+      "id": "multimodal_loader",
+      "type": "loader.multimodal",
+      "label": "Loader Póliza + Fotos",
+      "config": {
+        "extractTables": true,
+        "describeImages": true,
+        "sectionScheme": "insurance-policy"
+      },
+      "position": {
+        "x": 300,
+        "y": 300
+      }
+    },
+    {
+      "id": "vision_model",
+      "type": "model.vision",
+      "label": "Vision — Descripción de Daños",
+      "config": {
+        "model": "anthropic:claude-opus-4-8"
+      },
+      "position": {
+        "x": 300,
+        "y": 120
+      }
+    },
+    {
+      "id": "chunker",
+      "type": "ingest.chunker",
+      "label": "Chunker by-clause",
+      "config": {
+        "strategy": "by-clause",
+        "chunkSize": 800,
+        "overlap": 100
+      },
+      "position": {
+        "x": 540,
+        "y": 300
+      }
+    },
+    {
+      "id": "metadata_tagger",
+      "type": "ingest.metadata",
+      "label": "Metadata policy_type / coverage_section",
+      "config": {
+        "fields": [
+          "policy_type",
+          "coverage_section"
+        ]
+      },
+      "position": {
+        "x": 780,
+        "y": 300
+      }
+    },
+    {
+      "id": "embedding_model",
+      "type": "model.embedding",
+      "label": "Embedding Model",
+      "config": {
+        "model": "text-embedding-3-large",
+        "local": false,
+        "apiKeyRef": "OPENAI_API_KEY"
+      },
+      "position": {
+        "x": 780,
+        "y": 480
+      }
+    },
+    {
+      "id": "policy_store",
+      "type": "store.pgvector",
+      "label": "PgVector — Índice de Pólizas",
+      "config": {
+        "index": "policies",
+        "distance": "cosine"
+      },
+      "position": {
+        "x": 1020,
+        "y": 300
+      }
+    },
+    {
+      "id": "policy_retrieval",
+      "type": "retrieval.vector",
+      "label": "Retrieval — Cláusulas Aplicables",
+      "config": {
+        "topK": 5,
+        "hardFilters": [
+          "policy_type"
+        ]
+      },
+      "position": {
+        "x": 1260,
+        "y": 300
+      }
+    },
+    {
+      "id": "llm",
+      "type": "model.llm",
+      "label": "Claude Opus 4.8",
+      "config": {
+        "model": "anthropic:claude-opus-4-8",
+        "temperature": 0.1,
+        "apiKeyRef": "ANTHROPIC_API_KEY"
+      },
+      "position": {
+        "x": 1260,
+        "y": 120
+      }
+    },
+    {
+      "id": "eligibility_rules",
+      "type": "logic.rules",
+      "label": "Reglas de Elegibilidad",
+      "config": {
+        "rules": [
+          {
+            "when": "deducible_no_alcanzado == true",
+            "then": "{ \"elegible\": false, \"razon\": \"El monto del daño no supera el deducible pactado\" }"
+          },
+          {
+            "when": "exclusion_aplicada == true",
+            "then": "{ \"elegible\": false, \"razon\": \"El siniestro corresponde a una exclusión de cobertura\" }"
+          },
+          {
+            "when": "poliza_vencida == true",
+            "then": "{ \"elegible\": false, \"razon\": \"La póliza no se encontraba vigente en la fecha del siniestro\" }"
+          }
+        ],
+        "else": "{ \"elegible\": true }"
+      },
+      "position": {
+        "x": 1500,
+        "y": 420
+      }
+    },
+    {
+      "id": "coverage_decision",
+      "type": "logic.structured",
+      "label": "Decisión de Cobertura",
+      "config": {
+        "schema": {
+          "type": "object",
+          "required": [
+            "cubierto",
+            "monto_estimado",
+            "clausula_aplicada",
+            "razon"
+          ],
+          "properties": {
+            "cubierto": {
+              "type": "boolean",
+              "title": "¿El daño está cubierto?"
+            },
+            "monto_estimado": {
+              "type": "number",
+              "title": "Monto estimado a pagar (USD)"
+            },
+            "deducible_aplicado": {
+              "type": "number",
+              "title": "Deducible aplicado (USD)"
+            },
+            "clausula_aplicada": {
+              "type": "string",
+              "title": "Cláusula o artículo de la póliza"
+            },
+            "razon": {
+              "type": "string",
+              "title": "Explicación de la decisión"
+            }
+          }
+        },
+        "requireCitations": true
+      },
+      "position": {
+        "x": 1740,
+        "y": 300
+      }
+    },
+    {
+      "id": "json_output",
+      "type": "io.output",
+      "label": "Salida JSON",
+      "config": {
+        "format": "json",
+        "streaming": false
+      },
+      "position": {
+        "x": 1980,
+        "y": 300
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "multimodal_loader",
+      "sourcePort": "Documents",
+      "target": "chunker",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "chunker",
+      "sourcePort": "Documents",
+      "target": "metadata_tagger",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "metadata_tagger",
+      "sourcePort": "Documents",
+      "target": "policy_store",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "embedding_model",
+      "sourcePort": "Embeddings",
+      "target": "policy_store",
+      "targetPort": "Embeddings",
+      "loop": false
+    },
+    {
+      "source": "policy_store",
+      "sourcePort": "Retriever",
+      "target": "policy_retrieval",
+      "targetPort": "Retriever",
+      "loop": false
+    },
+    {
+      "source": "policy_retrieval",
+      "sourcePort": "Chunks",
+      "target": "eligibility_rules",
+      "targetPort": "Any",
+      "loop": false
+    },
+    {
+      "source": "policy_retrieval",
+      "sourcePort": "Chunks",
+      "target": "coverage_decision",
+      "targetPort": "Chunks",
+      "loop": false
+    },
+    {
+      "source": "eligibility_rules",
+      "sourcePort": "Decision",
+      "target": "coverage_decision",
+      "targetPort": "Context",
+      "loop": false
+    },
+    {
+      "source": "llm",
+      "sourcePort": "Model",
+      "target": "coverage_decision",
+      "targetPort": "Model",
+      "loop": false
+    },
+    {
+      "source": "vision_model",
+      "sourcePort": "Model",
+      "target": "coverage_decision",
+      "targetPort": "Model",
+      "loop": false
+    },
+    {
+      "source": "coverage_decision",
+      "sourcePort": "Decision",
+      "target": "json_output",
+      "targetPort": "Any",
+      "loop": false
+    },
+    {
+      "source": "batch_input",
+      "sourcePort": "Documents",
+      "target": "chunker",
+      "targetPort": "Documents",
+      "loop": false
+    }
+  ],
+  "secrets": [
+    {
+      "name": "ANTHROPIC_API_KEY",
+      "required": true,
+      "usedBy": [
+        "llm",
+        "vision_model"
+      ]
+    },
+    {
+      "name": "OPENAI_API_KEY",
+      "required": true,
+      "usedBy": [
+        "embedding_model"
+      ]
+    },
+    {
+      "name": "DATABASE_URL",
+      "required": true,
+      "usedBy": [
+        "policy_store"
+      ]
+    },
+    {
+      "name": "STORAGE_KEY",
+      "required": false,
+      "usedBy": [
+        "batch_input"
+      ]
+    }
+  ]
+}

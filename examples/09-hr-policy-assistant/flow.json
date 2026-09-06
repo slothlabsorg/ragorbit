@@ -1,0 +1,195 @@
+{
+  "irVersion": "1.0",
+  "flow": {
+    "id": "hr-policy-assistant",
+    "name": "Asistente de políticas y beneficios para empleados",
+    "description": "Bot conversacional que responde preguntas de RRHH citando la sección exacta del manual del empleado o las políticas de vacaciones y beneficios.",
+    "deploymentTarget": "chat-service",
+    "defaults": { "llm": "anthropic:claude-opus-4-8" }
+  },
+  "nodes": [
+    {
+      "id": "chat_input",
+      "type": "io.input",
+      "label": "Entrada Chat",
+      "config": {
+        "channel": "chat",
+        "auth": "none",
+        "streaming": true
+      },
+      "position": { "x": 60, "y": 300 }
+    },
+    {
+      "id": "hr_docs",
+      "type": "loader.pdf",
+      "label": "Docs RRHH (PDF)",
+      "config": {
+        "path": "data/hr_docs/",
+        "ocr": false
+      },
+      "position": { "x": 60, "y": 560 }
+    },
+    {
+      "id": "chunker",
+      "type": "ingest.chunker",
+      "label": "Troceador por sección",
+      "config": {
+        "strategy": "by-section",
+        "chunkSize": 800,
+        "overlap": 120
+      },
+      "position": { "x": 280, "y": 560 }
+    },
+    {
+      "id": "embedder",
+      "type": "model.embedding",
+      "label": "Modelo Embedding",
+      "config": {
+        "model": "text-embedding-3-large",
+        "local": false,
+        "apiKeyRef": "ANTHROPIC_API_KEY"
+      },
+      "position": { "x": 500, "y": 680 }
+    },
+    {
+      "id": "hr_store",
+      "type": "store.chroma",
+      "label": "Chroma hr_policies",
+      "config": {
+        "collection": "hr_policies"
+      },
+      "position": { "x": 500, "y": 560 }
+    },
+    {
+      "id": "retriever",
+      "type": "retrieval.vector",
+      "label": "Recuperador Políticas",
+      "config": {
+        "topK": 4
+      },
+      "position": { "x": 720, "y": 300 }
+    },
+    {
+      "id": "llm",
+      "type": "model.llm",
+      "label": "Claude Opus 4.8",
+      "config": {
+        "model": "anthropic:claude-opus-4-8",
+        "temperature": 0.2,
+        "apiKeyRef": "ANTHROPIC_API_KEY"
+      },
+      "position": { "x": 280, "y": 160 }
+    },
+    {
+      "id": "prompt",
+      "type": "logic.prompt",
+      "label": "Síntesis RRHH",
+      "config": {
+        "system": "Eres el asistente oficial de RRHH de la empresa. Responde de forma clara y empática. Basa TODA respuesta en los fragmentos de política recuperados. Si la información no está en los documentos, dilo explícitamente.",
+        "template": "Pregunta del empleado: {message}\n\nFragmentos de política relevantes:\n{chunks}\n\nResponde en markdown, con lenguaje sencillo y sin tecnicismos innecesarios."
+      },
+      "position": { "x": 940, "y": 300 }
+    },
+    {
+      "id": "citations",
+      "type": "logic.citations",
+      "label": "Citas obligatorias",
+      "config": {
+        "mode": "enforce"
+      },
+      "position": { "x": 1160, "y": 300 }
+    },
+    {
+      "id": "chat_output",
+      "type": "io.output",
+      "label": "Salida Markdown",
+      "config": {
+        "format": "markdown",
+        "streaming": true
+      },
+      "position": { "x": 1380, "y": 300 }
+    }
+  ],
+  "edges": [
+    {
+      "source": "chat_input",
+      "sourcePort": "Message",
+      "target": "retriever",
+      "targetPort": "Query",
+      "loop": false
+    },
+    {
+      "source": "hr_docs",
+      "sourcePort": "Documents",
+      "target": "chunker",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "chunker",
+      "sourcePort": "Documents",
+      "target": "hr_store",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "embedder",
+      "sourcePort": "Embeddings",
+      "target": "hr_store",
+      "targetPort": "Embeddings",
+      "loop": false
+    },
+    {
+      "source": "hr_store",
+      "sourcePort": "Retriever",
+      "target": "retriever",
+      "targetPort": "Retriever",
+      "loop": false
+    },
+    {
+      "source": "retriever",
+      "sourcePort": "Chunks",
+      "target": "prompt",
+      "targetPort": "Chunks",
+      "loop": false
+    },
+    {
+      "source": "chat_input",
+      "sourcePort": "Message",
+      "target": "prompt",
+      "targetPort": "Message",
+      "loop": false
+    },
+    {
+      "source": "llm",
+      "sourcePort": "Model",
+      "target": "prompt",
+      "targetPort": "Model",
+      "loop": false
+    },
+    {
+      "source": "prompt",
+      "sourcePort": "Message",
+      "target": "citations",
+      "targetPort": "Message",
+      "loop": false
+    },
+    {
+      "source": "retriever",
+      "sourcePort": "Chunks",
+      "target": "citations",
+      "targetPort": "Chunks",
+      "loop": false
+    },
+    {
+      "source": "citations",
+      "sourcePort": "Message",
+      "target": "chat_output",
+      "targetPort": "Any",
+      "loop": false
+    }
+  ],
+  "secrets": [
+    { "name": "ANTHROPIC_API_KEY", "required": true, "usedBy": ["llm", "embedder"] }
+  ]
+}

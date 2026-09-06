@@ -1,0 +1,11 @@
+# Chat en modo mock (sin servicios externos). Ideal para desarrollo rápido.
+#   docker compose -f docker-compose.yml up --build
+services:
+  app:
+    build: .
+    ports: ["8888:8000"]
+    environment:
+      - MOCK=true
+      - INTEGRATION=false
+      - FLOW_ID={{FLOW_ID}}
+      - PORT=8000

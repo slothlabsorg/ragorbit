@@ -1,0 +1,142 @@
+[
+  {
+    "type": "retrieval.vector",
+    "category": "retrieval",
+    "title": "Búsqueda vectorial",
+    "description": "Búsqueda por similitud semántica sobre un índice vectorial.",
+    "ports": {
+      "inputs": [
+        { "name": "Retriever", "type": "Retriever" },
+        { "name": "Query", "type": "Query" }
+      ],
+      "outputs": [
+        { "name": "Chunks", "type": "Chunks" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "topK": { "type": "integer", "default": 4, "title": "Top K resultados" },
+        "hardFilters": { "type": "array", "items": { "type": "string" }, "default": [], "title": "Filtros duros (p.ej. fare_class)" }
+      }
+    },
+    "emitter": "retrieval.vector",
+    "mock": { "behavior": "retrieve" }
+  },
+  {
+    "type": "retrieval.graph",
+    "category": "retrieval",
+    "title": "Recuperación en grafo",
+    "description": "Recuperación sobre knowledge graph: vecindario de entidades y relaciones (GraphRAG).",
+    "ports": {
+      "inputs": [
+        { "name": "Retriever", "type": "Retriever" },
+        { "name": "Query", "type": "Query" }
+      ],
+      "outputs": [
+        { "name": "Chunks", "type": "Chunks" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "hops": { "type": "integer", "default": 1, "title": "Saltos en el grafo" },
+        "pattern": { "type": "string", "title": "Patrón de relación (Cypher)" }
+      }
+    },
+    "emitter": "retrieval.graph",
+    "mock": { "behavior": "retrieve" }
+  },
+  {
+    "type": "retrieval.hybrid",
+    "category": "retrieval",
+    "title": "Búsqueda híbrida",
+    "description": "Combina búsqueda vectorial y keyword (BM25) con fusión ponderada.",
+    "ports": {
+      "inputs": [
+        { "name": "Retriever", "type": "Retriever" }
+      ],
+      "outputs": [
+        { "name": "Chunks", "type": "Chunks" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "alpha": { "type": "number", "default": 0.5, "title": "Peso vector vs keyword (0=keyword, 1=vector)" }
+      }
+    },
+    "emitter": "retrieval.hybrid",
+    "mock": { "behavior": "retrieve" }
+  },
+  {
+    "type": "retrieval.router",
+    "category": "retrieval",
+    "title": "Router multi-index",
+    "description": "Enruta la query al índice más relevante por keyword/intent para ahorrar latencia y ruido.",
+    "ports": {
+      "inputs": [
+        { "name": "Retriever", "type": "Retriever", "multi": true },
+        { "name": "Query", "type": "Query" }
+      ],
+      "outputs": [
+        { "name": "Chunks", "type": "Chunks" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "rules": { "type": "array", "items": { "type": "object" }, "default": [], "title": "Reglas de routing (keyword→index)" },
+        "fallback": { "type": "string", "title": "Índice de fallback" }
+      }
+    },
+    "emitter": "retrieval.router",
+    "mock": { "behavior": "route_retrieve" }
+  },
+  {
+    "type": "retrieval.parent-child",
+    "category": "retrieval",
+    "title": "Parent-child",
+    "description": "Recupera el chunk padre para ampliar el contexto alrededor del chunk relevante.",
+    "ports": {
+      "inputs": [
+        { "name": "Retriever", "type": "Retriever" }
+      ],
+      "outputs": [
+        { "name": "Chunks", "type": "Chunks" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "parentField": { "type": "string", "default": "parent_id", "title": "Campo de referencia al padre" }
+      }
+    },
+    "emitter": "retrieval.parent-child",
+    "mock": { "behavior": "retrieve" }
+  },
+  {
+    "type": "retrieval.reranker",
+    "category": "retrieval",
+    "title": "Reranker",
+    "description": "Reordena y recorta a top-N los chunks más relevantes; soporta fine-tune vía feedback.",
+    "ports": {
+      "inputs": [
+        { "name": "Chunks", "type": "Chunks" }
+      ],
+      "outputs": [
+        { "name": "Chunks", "type": "Chunks" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "model": { "type": "string", "default": "bge-reranker", "title": "Modelo de reranking" },
+        "topN": { "type": "integer", "default": 3, "title": "Top N tras reranking" },
+        "feedbackRef": { "type": "string", "title": "Índice de feedback para fine-tune" }
+      }
+    },
+    "emitter": "retrieval.reranker",
+    "mock": { "behavior": "rerank" }
+  }
+]

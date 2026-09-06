@@ -1,0 +1,252 @@
+{
+  "irVersion": "1.0",
+  "flow": {
+    "id": "manufacturing-maintenance-rag",
+    "name": "RAG técnico sobre manuales de mantenimiento AMM",
+    "description": "Técnico de mantenimiento consulta procedimientos del AMM (Boeing/Airbus). Parseo multimodal con capítulos ATA, filtros duros por aeronave y capítulo, citas obligatorias y escalación HITL ante CAUTION/WARNING.",
+    "deploymentTarget": "chat-service",
+    "defaults": { "llm": "anthropic:claude-opus-4-8" }
+  },
+  "nodes": [
+    {
+      "id": "chat_input",
+      "type": "io.input",
+      "label": "Consulta del Técnico",
+      "config": {
+        "channel": "chat",
+        "auth": "jwt",
+        "streaming": true
+      },
+      "position": { "x": 60, "y": 360 }
+    },
+    {
+      "id": "amm_loader",
+      "type": "loader.multimodal",
+      "label": "Loader AMM (ATA)",
+      "config": {
+        "extractTables": true,
+        "describeImages": true,
+        "sectionScheme": "ATA"
+      },
+      "position": { "x": 60, "y": 640 }
+    },
+    {
+      "id": "vision_model",
+      "type": "model.vision",
+      "label": "Vision — Diagramas AMM",
+      "config": {
+        "model": "anthropic:claude-opus-4-8",
+        "apiKeyRef": "ANTHROPIC_API_KEY"
+      },
+      "position": { "x": 280, "y": 540 }
+    },
+    {
+      "id": "chunker",
+      "type": "ingest.chunker",
+      "label": "Chunker by-section",
+      "config": {
+        "strategy": "by-section",
+        "chunkSize": 900,
+        "overlap": 120
+      },
+      "position": { "x": 280, "y": 700 }
+    },
+    {
+      "id": "metadata_amm",
+      "type": "ingest.metadata",
+      "label": "Metadata ATA / Aeronave",
+      "config": {
+        "fields": ["ata_chapter", "aircraft_type", "document", "content_type", "revision_date"]
+      },
+      "position": { "x": 500, "y": 700 }
+    },
+    {
+      "id": "embedding_model",
+      "type": "model.embedding",
+      "label": "Embedding AMM",
+      "config": {
+        "model": "text-embedding-3-large",
+        "local": false,
+        "apiKeyRef": "OPENAI_API_KEY"
+      },
+      "position": { "x": 500, "y": 560 }
+    },
+    {
+      "id": "pgvector_amm",
+      "type": "store.pgvector",
+      "label": "Store AMM (pgvector)",
+      "config": {
+        "index": "amm",
+        "distance": "cosine"
+      },
+      "position": { "x": 720, "y": 640 }
+    },
+    {
+      "id": "amm_retrieval",
+      "type": "retrieval.vector",
+      "label": "Retrieval AMM",
+      "config": {
+        "topK": 5,
+        "hardFilters": ["aircraft_type", "ata_chapter"]
+      },
+      "position": { "x": 940, "y": 640 }
+    },
+    {
+      "id": "llm",
+      "type": "model.llm",
+      "label": "LLM Principal",
+      "config": {
+        "model": "anthropic:claude-opus-4-8",
+        "temperature": 0.1,
+        "apiKeyRef": "ANTHROPIC_API_KEY"
+      },
+      "position": { "x": 280, "y": 360 }
+    },
+    {
+      "id": "prompt_amm",
+      "type": "logic.prompt",
+      "label": "Síntesis Procedimiento AMM",
+      "config": {
+        "template": "Eres un asistente técnico de mantenimiento aeronáutico. Usa EXCLUSIVAMENTE los fragmentos del AMM recuperados para responder la consulta del técnico. Indica siempre el capítulo ATA, el número de sección y la revisión del documento. Si el procedimiento contiene una advertencia CAUTION o WARNING, inclúyela textualmente y señala nivel=WARNING en tu respuesta.",
+        "system": "Asistente de mantenimiento aeronáutico — solo AMM certificado"
+      },
+      "position": { "x": 940, "y": 360 }
+    },
+    {
+      "id": "citations_check",
+      "type": "logic.citations",
+      "label": "Citas Obligatorias AMM",
+      "config": {
+        "mode": "enforce"
+      },
+      "position": { "x": 1160, "y": 360 }
+    },
+    {
+      "id": "escalate_inspector",
+      "type": "hitl.escalate",
+      "label": "Escalar a Inspector Certificado",
+      "config": {
+        "when": "nivel == 'WARNING' OR nivel == 'CAUTION'",
+        "assignee": "certified-inspector",
+        "timeout": "2h"
+      },
+      "position": { "x": 1380, "y": 360 }
+    },
+    {
+      "id": "chat_output",
+      "type": "io.output",
+      "label": "Respuesta al Técnico",
+      "config": {
+        "format": "markdown",
+        "streaming": true
+      },
+      "position": { "x": 1600, "y": 360 }
+    }
+  ],
+  "edges": [
+    {
+      "source": "amm_loader",
+      "sourcePort": "documents",
+      "target": "chunker",
+      "targetPort": "documents",
+      "loop": false
+    },
+    {
+      "source": "chunker",
+      "sourcePort": "documents",
+      "target": "metadata_amm",
+      "targetPort": "documents",
+      "loop": false
+    },
+    {
+      "source": "metadata_amm",
+      "sourcePort": "documents",
+      "target": "pgvector_amm",
+      "targetPort": "documents",
+      "loop": false
+    },
+    {
+      "source": "embedding_model",
+      "sourcePort": "embeddings",
+      "target": "pgvector_amm",
+      "targetPort": "embeddings",
+      "loop": false
+    },
+    {
+      "source": "vision_model",
+      "sourcePort": "model",
+      "target": "amm_loader",
+      "targetPort": "any",
+      "loop": false
+    },
+    {
+      "source": "pgvector_amm",
+      "sourcePort": "retriever",
+      "target": "amm_retrieval",
+      "targetPort": "retriever",
+      "loop": false
+    },
+    {
+      "source": "chat_input",
+      "sourcePort": "message",
+      "target": "amm_retrieval",
+      "targetPort": "query",
+      "loop": false
+    },
+    {
+      "source": "amm_retrieval",
+      "sourcePort": "chunks",
+      "target": "prompt_amm",
+      "targetPort": "chunks",
+      "loop": false
+    },
+    {
+      "source": "chat_input",
+      "sourcePort": "message",
+      "target": "prompt_amm",
+      "targetPort": "message",
+      "loop": false
+    },
+    {
+      "source": "llm",
+      "sourcePort": "model",
+      "target": "prompt_amm",
+      "targetPort": "model",
+      "loop": false
+    },
+    {
+      "source": "prompt_amm",
+      "sourcePort": "message",
+      "target": "citations_check",
+      "targetPort": "message",
+      "loop": false
+    },
+    {
+      "source": "amm_retrieval",
+      "sourcePort": "chunks",
+      "target": "citations_check",
+      "targetPort": "chunks",
+      "loop": false
+    },
+    {
+      "source": "citations_check",
+      "sourcePort": "message",
+      "target": "escalate_inspector",
+      "targetPort": "any",
+      "loop": false
+    },
+    {
+      "source": "escalate_inspector",
+      "sourcePort": "any",
+      "target": "chat_output",
+      "targetPort": "any",
+      "loop": false
+    }
+  ],
+  "secrets": [
+    { "name": "ANTHROPIC_API_KEY", "required": true,  "usedBy": ["llm", "vision_model"] },
+    { "name": "OPENAI_API_KEY",    "required": true,  "usedBy": ["embedding_model"] },
+    { "name": "DATABASE_URL",      "required": true,  "usedBy": ["pgvector_amm"] },
+    { "name": "JWT_PUBLIC_KEY",    "required": true,  "usedBy": ["chat_input"] }
+  ]
+}

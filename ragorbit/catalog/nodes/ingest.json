@@ -1,0 +1,40 @@
+[
+  {
+    "type": "ingest.chunker",
+    "category": "ingest",
+    "title": "Chunker",
+    "description": "Trocea documentos. Estrategia consciente de estructura (cláusula/sección).",
+    "ports": {
+      "inputs": [{ "name": "Documents", "type": "Documents" }],
+      "outputs": [{ "name": "Documents", "type": "Documents" }]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "strategy": { "type": "string", "enum": ["recursive", "by-section", "by-clause"], "default": "recursive", "title": "Estrategia" },
+        "chunkSize": { "type": "integer", "default": 1000, "title": "Tamaño de chunk" },
+        "overlap": { "type": "integer", "default": 150, "title": "Solapamiento" }
+      }
+    },
+    "emitter": "ingest.chunker",
+    "mock": { "behavior": "chunk" }
+  },
+  {
+    "type": "ingest.metadata",
+    "category": "ingest",
+    "title": "Etiquetador de Metadata",
+    "description": "Etiqueta metadata por chunk para filtros duros.",
+    "ports": {
+      "inputs": [{ "name": "Documents", "type": "Documents" }],
+      "outputs": [{ "name": "Documents", "type": "Documents" }]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "fields": { "type": "array", "items": { "type": "string" }, "title": "Campos (p.ej. fare_class, aircraft_type, effective_date)" }
+      }
+    },
+    "emitter": "ingest.metadata",
+    "mock": { "behavior": "tag_metadata" }
+  }
+]

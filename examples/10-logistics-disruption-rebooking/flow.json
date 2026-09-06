@@ -1,0 +1,287 @@
+{
+  "irVersion": "1.0",
+  "flow": {
+    "id": "logistics-disruption-rebooking",
+    "name": "Rebooking de envíos en disrupción masiva",
+    "description": "Worker event-driven que consume alertas de disrupción (tormenta, cierre de hub) desde Kafka, segmenta envíos por prioridad, auto-confirma los casos simples mediante reglas deterministas y usa LLM solo para los complejos (multi-leg), notificando al cliente en todos los casos.",
+    "deploymentTarget": "event-worker",
+    "defaults": { "llm": "anthropic:claude-opus-4-8" }
+  },
+  "nodes": [
+    {
+      "id": "disruption_source",
+      "type": "io.event-source",
+      "label": "Kafka — shipment.disruption",
+      "config": {
+        "broker": "kafka",
+        "topic": "shipment.disruption",
+        "partitionKey": "shipment_id",
+        "exactlyOnce": true
+      },
+      "position": { "x": 60, "y": 400 }
+    },
+    {
+      "id": "priority_rules",
+      "type": "logic.rules",
+      "label": "Segmentación por prioridad y severidad",
+      "config": {
+        "rules": [
+          {
+            "when": "event.tier == 'premium' || event.connections_lost > 0",
+            "then": "{ priority: 'P1', track: 'complex' }"
+          },
+          {
+            "when": "event.delivery_flexibility == 'flexible'",
+            "then": "{ priority: 'P2', track: 'simple' }"
+          },
+          {
+            "when": "event.disruption_severity == 'CRITICAL'",
+            "then": "{ priority: 'P1', track: 'complex' }"
+          }
+        ],
+        "else": "{ priority: 'P3', track: 'simple' }"
+      },
+      "position": { "x": 300, "y": 400 }
+    },
+    {
+      "id": "track_router",
+      "type": "logic.router",
+      "label": "Router simple vs complejo",
+      "config": {
+        "branches": [
+          { "name": "simple",  "when": "decision.track == 'simple'" },
+          { "name": "complex", "when": "decision.track == 'complex'" }
+        ]
+      },
+      "position": { "x": 540, "y": 400 }
+    },
+    {
+      "id": "shipment_profile_tool",
+      "type": "tool.service",
+      "label": "ShipmentProfileService",
+      "config": {
+        "name": "ShipmentProfileService",
+        "baseUrl": "https://api.logistics.internal/shipments",
+        "operation": "getProfile",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "shipment_id": { "type": "string" },
+            "include_history": { "type": "boolean" }
+          },
+          "required": ["shipment_id"]
+        },
+        "outputSchema": { "type": "object" }
+      },
+      "position": { "x": 780, "y": 160 }
+    },
+    {
+      "id": "policy_store",
+      "type": "store.pgvector",
+      "label": "PgVector — rebook_policies",
+      "config": {
+        "index": "rebook_policies",
+        "distance": "cosine"
+      },
+      "position": { "x": 780, "y": 720 }
+    },
+    {
+      "id": "embedding_model",
+      "type": "model.embedding",
+      "label": "Embedding Model",
+      "config": {
+        "model": "text-embedding-3-large",
+        "local": false,
+        "apiKeyRef": "OPENAI_API_KEY"
+      },
+      "position": { "x": 560, "y": 720 }
+    },
+    {
+      "id": "policy_tool",
+      "type": "tool.retriever",
+      "label": "PolicyRAG Tool",
+      "config": {
+        "name": "policy_rag",
+        "description": "Consulta reglas de rebooking filtradas por causa de disrupción (weather, hub_closure, carrier_failure). Devuelve políticas aplicables: penalidades, ventanas de reembolso y opciones sin cargo."
+      },
+      "position": { "x": 1220, "y": 720 }
+    },
+    {
+      "id": "alternatives_tool",
+      "type": "tool.service",
+      "label": "AlternativesService",
+      "config": {
+        "name": "AlternativesService",
+        "baseUrl": "https://api.logistics.internal/routing",
+        "operation": "getAlternatives",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "shipment_id":      { "type": "string" },
+            "window_hours":     { "type": "integer" },
+            "disruption_cause": { "type": "string" }
+          },
+          "required": ["shipment_id", "window_hours"]
+        },
+        "outputSchema": { "type": "object" }
+      },
+      "position": { "x": 780, "y": 400 }
+    },
+    {
+      "id": "autoconfirm_tool",
+      "type": "tool.service",
+      "label": "AutoConfirmService",
+      "config": {
+        "name": "AutoConfirmService",
+        "baseUrl": "https://api.logistics.internal/rebooking",
+        "operation": "autoConfirm",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "shipment_id":   { "type": "string" },
+            "alternative_id": { "type": "string" },
+            "reason":        { "type": "string" }
+          },
+          "required": ["shipment_id", "alternative_id"]
+        },
+        "outputSchema": { "type": "object" }
+      },
+      "position": { "x": 780, "y": 560 }
+    },
+    {
+      "id": "fanout",
+      "type": "agent.fanout",
+      "label": "Fan-out — sub-agentes por envío",
+      "config": {
+        "concurrency": 16,
+        "subAgentSystem": "Eres un agente de rebooking logístico. Para cada envío en disrupción: (1) Obtén el perfil con ShipmentProfileService (tier, historial, preferencias). (2) Consulta PolicyRAG con la causa de disrupción para determinar penalidades y opciones sin cargo. (3) Busca rutas alternativas con AlternativesService en ventana de 48 horas. (4) Si existe una opción obvia (única alternativa válida o política sin penalidad), confirma automáticamente con AutoConfirmService. Solo escala al LLM si el caso es multi-leg o hay ambigüedad de política. Sé determinista y eficiente."
+      },
+      "position": { "x": 1000, "y": 400 }
+    },
+    {
+      "id": "notify",
+      "type": "io.notify",
+      "label": "Notificación al cliente",
+      "config": {
+        "channels": ["email", "sms", "push"]
+      },
+      "position": { "x": 1440, "y": 400 }
+    },
+    {
+      "id": "audit",
+      "type": "observability.audit",
+      "label": "Audit Trail — Kafka",
+      "config": {
+        "sink": "kafka",
+        "topic": "rebooking-audit"
+      },
+      "position": { "x": 1440, "y": 560 }
+    },
+    {
+      "id": "metrics",
+      "type": "observability.metrics",
+      "label": "Métricas OTLP",
+      "config": {
+        "exporter": "otlp"
+      },
+      "position": { "x": 1440, "y": 700 }
+    }
+  ],
+  "edges": [
+    {
+      "source": "disruption_source",
+      "sourcePort": "Event",
+      "target": "priority_rules",
+      "targetPort": "Any",
+      "loop": false
+    },
+    {
+      "source": "priority_rules",
+      "sourcePort": "Decision",
+      "target": "track_router",
+      "targetPort": "Decision",
+      "loop": false
+    },
+    {
+      "source": "track_router",
+      "sourcePort": "Any",
+      "target": "fanout",
+      "targetPort": "Event",
+      "loop": false
+    },
+    {
+      "source": "shipment_profile_tool",
+      "sourcePort": "Tool",
+      "target": "fanout",
+      "targetPort": "Tool",
+      "loop": false
+    },
+    {
+      "source": "policy_tool",
+      "sourcePort": "Tool",
+      "target": "fanout",
+      "targetPort": "Tool",
+      "loop": false
+    },
+    {
+      "source": "alternatives_tool",
+      "sourcePort": "Tool",
+      "target": "fanout",
+      "targetPort": "Tool",
+      "loop": false
+    },
+    {
+      "source": "autoconfirm_tool",
+      "sourcePort": "Tool",
+      "target": "fanout",
+      "targetPort": "Tool",
+      "loop": false
+    },
+    {
+      "source": "embedding_model",
+      "sourcePort": "Embeddings",
+      "target": "policy_store",
+      "targetPort": "Embeddings",
+      "loop": false
+    },
+    {
+      "source": "policy_store",
+      "sourcePort": "Retriever",
+      "target": "policy_tool",
+      "targetPort": "Retriever",
+      "loop": false
+    },
+    {
+      "source": "fanout",
+      "sourcePort": "Any",
+      "target": "notify",
+      "targetPort": "Any",
+      "loop": false
+    },
+    {
+      "source": "fanout",
+      "sourcePort": "Any",
+      "target": "audit",
+      "targetPort": "Any",
+      "loop": false
+    },
+    {
+      "source": "audit",
+      "sourcePort": "Any",
+      "target": "metrics",
+      "targetPort": "Any",
+      "loop": false
+    }
+  ],
+  "secrets": [
+    { "name": "ANTHROPIC_API_KEY",         "required": true,  "usedBy": ["fanout"] },
+    { "name": "OPENAI_API_KEY",             "required": true,  "usedBy": ["embedding_model"] },
+    { "name": "DATABASE_URL",               "required": true,  "usedBy": ["policy_store"] },
+    { "name": "KAFKA_BOOTSTRAP",            "required": true,  "usedBy": ["disruption_source", "audit"] },
+    { "name": "SHIPMENT_PROFILE_API_KEY",   "required": true,  "usedBy": ["shipment_profile_tool"] },
+    { "name": "ALTERNATIVES_API_KEY",       "required": true,  "usedBy": ["alternatives_tool"] },
+    { "name": "AUTOCONFIRM_API_KEY",        "required": true,  "usedBy": ["autoconfirm_tool"] },
+    { "name": "NOTIFY_API_KEY",             "required": true,  "usedBy": ["notify"] },
+    { "name": "OTLP_ENDPOINT",              "required": true,  "usedBy": ["metrics"] }
+  ]
+}

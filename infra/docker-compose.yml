@@ -1,0 +1,53 @@
+# Stack de servicios para probar/generar con RAGorbit (dev).
+# Todo lo que un flujo puede necesitar en modo REAL: vector stores, knowledge graph,
+# event streaming y un gateway de servicios mock. Modo mock NO necesita nada de esto.
+#   docker compose -f infra/docker-compose.yml up -d
+services:
+  # --- Vector store (pgvector) ---
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      - POSTGRES_USER=ragorbit
+      - POSTGRES_PASSWORD=ragorbit
+      - POSTGRES_DB=ragorbit
+    ports:
+      - "5432:5432"
+
+  # --- Vector store (Qdrant) ---
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+
+  # --- Knowledge graph (GraphRAG / Neo4j) ---
+  neo4j:
+    image: neo4j:5
+    environment:
+      - NEO4J_AUTH=neo4j/ragorbit123
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+
+  # --- Event streaming (Kafka via Redpanda) ---
+  kafka:
+    image: redpandadata/redpanda:latest
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --overprovisioned
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://kafka:9092
+    ports:
+      - "9092:9092"
+
+  # --- Gateway de servicios mock (Reservation/Inventory/Pricing/Payment/PolicyRAG) ---
+  mock-services:
+    build:
+      context: ..
+      dockerfile: e2e/airline-chat/Dockerfile
+    command: python e2e/airline-chat/services/mock_services.py 8900
+    environment:
+      - RAGORBIT_HOST=0.0.0.0
+    ports:
+      - "8900:8900"

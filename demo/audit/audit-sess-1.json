@@ -1,0 +1,451 @@
+{
+  "session": "sess-1",
+  "turn1": {
+    "message": "Quiero cambiar mi vuelo SCL-BOG del 15 al 17",
+    "response": "He procesado: «Quiero cambiar mi vuelo SCL-BOG del 15 al 17». Consulté: policy_rag, ReservationService, InventoryService, PricingService. [fuente: policy_pdf#sec1] El costo total es USD 130. ¿Confirmas la operación?",
+    "calls": [
+      {
+        "service": "reservation",
+        "operation": "lookup",
+        "url": "http://127.0.0.1:8920/reservation/lookup",
+        "request": {
+          "message": "Quiero cambiar mi vuelo SCL-BOG del 15 al 17"
+        },
+        "response": {
+          "pnr": "ABC123",
+          "route": "SCL-BOG",
+          "date": "2026-06-15",
+          "fareClass": "Plus",
+          "passenger": "J. Pérez"
+        },
+        "idempotencyKey": "airline-flight-change:sess-1"
+      },
+      {
+        "service": "inventory",
+        "operation": "search",
+        "url": "http://127.0.0.1:8920/inventory/search",
+        "request": {
+          "message": "Quiero cambiar mi vuelo SCL-BOG del 15 al 17"
+        },
+        "response": {
+          "options": [
+            {
+              "flightId": "LA-441",
+              "date": "2026-06-17",
+              "seats": 9
+            },
+            {
+              "flightId": "LA-447",
+              "date": "2026-06-17",
+              "seats": 3
+            }
+          ]
+        },
+        "idempotencyKey": "airline-flight-change:sess-1"
+      },
+      {
+        "service": "pricing",
+        "operation": "quote",
+        "url": "http://127.0.0.1:8920/pricing/quote",
+        "request": {
+          "message": "Quiero cambiar mi vuelo SCL-BOG del 15 al 17"
+        },
+        "response": {
+          "currency": "USD",
+          "penalty": 50,
+          "fareDifference": 80,
+          "amount": 130
+        },
+        "idempotencyKey": "airline-flight-change:sess-1"
+      }
+    ],
+    "guardrails": {
+      "tool_calls": [
+        {
+          "name": "policy_rag",
+          "wrappers": [],
+          "status": "ejecutado",
+          "executions": 1,
+          "result": {
+            "items": 3
+          }
+        },
+        {
+          "name": "ReservationService",
+          "wrappers": [],
+          "status": "ejecutado",
+          "executions": 1,
+          "result": {
+            "pnr": "ABC123",
+            "route": "SCL-BOG",
+            "date": "2026-06-15",
+            "fareClass": "Plus",
+            "passenger": "J. Pérez"
+          }
+        },
+        {
+          "name": "InventoryService",
+          "wrappers": [],
+          "status": "ejecutado",
+          "executions": 1,
+          "result": {
+            "options": [
+              {
+                "flightId": "LA-441",
+                "date": "2026-06-17",
+                "seats": 9
+              },
+              {
+                "flightId": "LA-447",
+                "date": "2026-06-17",
+                "seats": 3
+              }
+            ]
+          }
+        },
+        {
+          "name": "PricingService",
+          "wrappers": [],
+          "status": "ejecutado",
+          "executions": 1,
+          "result": {
+            "currency": "USD",
+            "penalty": 50,
+            "fareDifference": 80,
+            "amount": 130
+          }
+        },
+        {
+          "name": "PaymentService",
+          "wrappers": [
+            "idempotency",
+            "confirm",
+            "resilience"
+          ],
+          "status": "pendiente-confirmación",
+          "executions": 0,
+          "needs_confirm": true,
+          "result": null
+        }
+      ],
+      "needs_confirm": true,
+      "confirmed": false,
+      "amount": 130,
+      "response": "He procesado: «Quiero cambiar mi vuelo SCL-BOG del 15 al 17». Consulté: policy_rag, ReservationService, InventoryService, PricingService. [fuente: policy_pdf#sec1] El costo total es USD 130. ¿Confirmas la operación?"
+    }
+  },
+  "turn2": {
+    "message": "Sí, confirmo el cambio.",
+    "response": "He procesado: «Sí, confirmo el cambio.». Consulté: policy_rag, ReservationService, InventoryService, PricingService, PaymentService. [fuente: policy_pdf#sec1] Operación confirmada y ejecutada.",
+    "calls": [
+      {
+        "service": "reservation",
+        "operation": "lookup",
+        "url": "http://127.0.0.1:8920/reservation/lookup",
+        "request": {
+          "message": "Sí, confirmo el cambio."
+        },
+        "response": {
+          "pnr": "ABC123",
+          "route": "SCL-BOG",
+          "date": "2026-06-15",
+          "fareClass": "Plus",
+          "passenger": "J. Pérez"
+        },
+        "idempotencyKey": "airline-flight-change:sess-1"
+      },
+      {
+        "service": "inventory",
+        "operation": "search",
+        "url": "http://127.0.0.1:8920/inventory/search",
+        "request": {
+          "message": "Sí, confirmo el cambio."
+        },
+        "response": {
+          "options": [
+            {
+              "flightId": "LA-441",
+              "date": "2026-06-17",
+              "seats": 9
+            },
+            {
+              "flightId": "LA-447",
+              "date": "2026-06-17",
+              "seats": 3
+            }
+          ]
+        },
+        "idempotencyKey": "airline-flight-change:sess-1"
+      },
+      {
+        "service": "pricing",
+        "operation": "quote",
+        "url": "http://127.0.0.1:8920/pricing/quote",
+        "request": {
+          "message": "Sí, confirmo el cambio."
+        },
+        "response": {
+          "currency": "USD",
+          "penalty": 50,
+          "fareDifference": 80,
+          "amount": 130
+        },
+        "idempotencyKey": "airline-flight-change:sess-1"
+      },
+      {
+        "service": "payment",
+        "operation": "charge",
+        "url": "http://127.0.0.1:8920/payment/charge",
+        "request": {
+          "message": "Sí, confirmo el cambio."
+        },
+        "response": {
+          "txnId": "TXN-0001",
+          "amount": 130,
+          "currency": "USD",
+          "status": "captured",
+          "deduplicated": false
+        },
+        "idempotencyKey": "airline-flight-change:sess-1"
+      }
+    ],
+    "guardrails": {
+      "tool_calls": [
+        {
+          "name": "policy_rag",
+          "wrappers": [],
+          "status": "ejecutado",
+          "executions": 1,
+          "result": {
+            "items": 3
+          }
+        },
+        {
+          "name": "ReservationService",
+          "wrappers": [],
+          "status": "ejecutado",
+          "executions": 1,
+          "result": {
+            "pnr": "ABC123",
+            "route": "SCL-BOG",
+            "date": "2026-06-15",
+            "fareClass": "Plus",
+            "passenger": "J. Pérez"
+          }
+        },
+        {
+          "name": "InventoryService",
+          "wrappers": [],
+          "status": "ejecutado",
+          "executions": 1,
+          "result": {
+            "options": [
+              {
+                "flightId": "LA-441",
+                "date": "2026-06-17",
+                "seats": 9
+              },
+              {
+                "flightId": "LA-447",
+                "date": "2026-06-17",
+                "seats": 3
+              }
+            ]
+          }
+        },
+        {
+          "name": "PricingService",
+          "wrappers": [],
+          "status": "ejecutado",
+          "executions": 1,
+          "result": {
+            "currency": "USD",
+            "penalty": 50,
+            "fareDifference": 80,
+            "amount": 130
+          }
+        },
+        {
+          "name": "PaymentService",
+          "wrappers": [
+            "idempotency",
+            "confirm",
+            "resilience"
+          ],
+          "status": "ejecutado",
+          "executions": 1,
+          "result": {
+            "txnId": "TXN-0001",
+            "amount": 130,
+            "currency": "USD",
+            "status": "captured",
+            "deduplicated": false
+          }
+        }
+      ],
+      "needs_confirm": false,
+      "confirmed": true,
+      "amount": 130,
+      "response": "He procesado: «Sí, confirmo el cambio.». Consulté: policy_rag, ReservationService, InventoryService, PricingService, PaymentService. [fuente: policy_pdf#sec1] Operación confirmada y ejecutada."
+    }
+  },
+  "payment_idempotency_retry": {
+    "txnId": "TXN-0001",
+    "amount": 130,
+    "currency": "USD",
+    "status": "captured",
+    "deduplicated": true
+  },
+  "bus_events": [
+    {
+      "node": "audit",
+      "sink": "kafka",
+      "payload": "He procesado: «Quiero cambiar mi vuelo SCL-BOG del 15 al 17». Consulté: policy_rag, ReservationService, InventoryService, PricingService. [fuente: policy_pdf#sec1] El costo total es USD 130. ¿Confirmas la operación?"
+    },
+    {
+      "node": "audit",
+      "sink": "kafka",
+      "payload": "He procesado: «Sí, confirmo el cambio.». Consulté: policy_rag, ReservationService, InventoryService, PricingService, PaymentService. [fuente: policy_pdf#sec1] Operación confirmada y ejecutada."
+    }
+  ],
+  "server_audit": [
+    {
+      "seq": 1,
+      "service": "reservation",
+      "operation": "lookup",
+      "request": {
+        "message": "Quiero cambiar mi vuelo SCL-BOG del 15 al 17"
+      },
+      "response": {
+        "pnr": "ABC123",
+        "route": "SCL-BOG",
+        "date": "2026-06-15",
+        "fareClass": "Plus",
+        "passenger": "J. Pérez"
+      }
+    },
+    {
+      "seq": 2,
+      "service": "inventory",
+      "operation": "search",
+      "request": {
+        "message": "Quiero cambiar mi vuelo SCL-BOG del 15 al 17"
+      },
+      "response": {
+        "options": [
+          {
+            "flightId": "LA-441",
+            "date": "2026-06-17",
+            "seats": 9
+          },
+          {
+            "flightId": "LA-447",
+            "date": "2026-06-17",
+            "seats": 3
+          }
+        ]
+      }
+    },
+    {
+      "seq": 3,
+      "service": "pricing",
+      "operation": "quote",
+      "request": {
+        "message": "Quiero cambiar mi vuelo SCL-BOG del 15 al 17"
+      },
+      "response": {
+        "currency": "USD",
+        "penalty": 50,
+        "fareDifference": 80,
+        "amount": 130
+      }
+    },
+    {
+      "seq": 4,
+      "service": "reservation",
+      "operation": "lookup",
+      "request": {
+        "message": "Sí, confirmo el cambio."
+      },
+      "response": {
+        "pnr": "ABC123",
+        "route": "SCL-BOG",
+        "date": "2026-06-15",
+        "fareClass": "Plus",
+        "passenger": "J. Pérez"
+      }
+    },
+    {
+      "seq": 5,
+      "service": "inventory",
+      "operation": "search",
+      "request": {
+        "message": "Sí, confirmo el cambio."
+      },
+      "response": {
+        "options": [
+          {
+            "flightId": "LA-441",
+            "date": "2026-06-17",
+            "seats": 9
+          },
+          {
+            "flightId": "LA-447",
+            "date": "2026-06-17",
+            "seats": 3
+          }
+        ]
+      }
+    },
+    {
+      "seq": 6,
+      "service": "pricing",
+      "operation": "quote",
+      "request": {
+        "message": "Sí, confirmo el cambio."
+      },
+      "response": {
+        "currency": "USD",
+        "penalty": 50,
+        "fareDifference": 80,
+        "amount": 130
+      }
+    },
+    {
+      "seq": 7,
+      "service": "payment",
+      "operation": "charge",
+      "request": {
+        "message": "Sí, confirmo el cambio."
+      },
+      "response": {
+        "txnId": "TXN-0001",
+        "amount": 130,
+        "currency": "USD",
+        "status": "captured",
+        "deduplicated": false
+      },
+      "idempotencyKey": "airline-flight-change:sess-1",
+      "deduplicated": false
+    },
+    {
+      "seq": 8,
+      "service": "payment",
+      "operation": "charge",
+      "request": {
+        "amount": 130,
+        "currency": "USD"
+      },
+      "response": {
+        "txnId": "TXN-0001",
+        "amount": 130,
+        "currency": "USD",
+        "status": "captured",
+        "deduplicated": true
+      },
+      "idempotencyKey": "airline-flight-change:sess-1",
+      "deduplicated": true
+    }
+  ],
+  "generated_at": "2026-06-15T17:35:42"
+}

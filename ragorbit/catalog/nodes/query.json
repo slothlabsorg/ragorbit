@@ -1,0 +1,42 @@
+[
+  {
+    "type": "query.rewrite",
+    "category": "query",
+    "title": "Reescritura de Query",
+    "description": "Normaliza jerga interna y expande la query antes de la recuperación.",
+    "ports": {
+      "inputs": [{ "name": "Message", "type": "Message" }],
+      "outputs": [{ "name": "Query", "type": "Query" }]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "glossaryRef": { "type": "string", "title": "Referencia a glosario" },
+        "expand": { "type": "boolean", "default": true, "title": "Expandir query" }
+      }
+    },
+    "emitter": "query.rewrite",
+    "mock": { "behavior": "rewrite" }
+  },
+  {
+    "type": "query.intent",
+    "category": "query",
+    "title": "Detección de Intención (routing)",
+    "description": "Detecta intención accionable orientada a routing; no dispara el RAG si no aplica. Alias de model.intent.",
+    "ports": {
+      "inputs": [{ "name": "Message", "type": "Message" }],
+      "outputs": [
+        { "name": "Query", "type": "Query" },
+        { "name": "Decision", "type": "Decision" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "labels": { "type": "array", "items": { "type": "string" }, "title": "Etiquetas" }
+      }
+    },
+    "emitter": "query.intent",
+    "mock": { "behavior": "intent" }
+  }
+]

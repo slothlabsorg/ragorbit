@@ -1,0 +1,376 @@
+{
+  "irVersion": "1.0",
+  "flow": {
+    "id": "healthcare-prior-auth",
+    "name": "Asistente de pre-autorización clínica",
+    "description": "Asistente de triage que evalúa solicitudes de pre-autorización médica consultando guías clínicas indexadas y escalando a revisor humano en casos críticos o ambiguos.",
+    "deploymentTarget": "chat-service",
+    "defaults": {
+      "llm": "anthropic:claude-opus-4-8"
+    }
+  },
+  "nodes": [
+    {
+      "id": "chat_input",
+      "type": "io.input",
+      "label": "Chat Entrada",
+      "config": {
+        "channel": "chat",
+        "auth": "jwt",
+        "streaming": true
+      },
+      "position": {
+        "x": 80,
+        "y": 300
+      }
+    },
+    {
+      "id": "llm",
+      "type": "model.llm",
+      "label": "LLM Principal",
+      "config": {
+        "model": "anthropic:claude-opus-4-8",
+        "temperature": 0.1,
+        "apiKeyRef": "ANTHROPIC_API_KEY"
+      },
+      "position": {
+        "x": 280,
+        "y": 160
+      }
+    },
+    {
+      "id": "pdf_guidelines",
+      "type": "loader.pdf",
+      "label": "Guías Clínicas PDF",
+      "config": {
+        "path": "data/clinical_guidelines",
+        "ocr": false
+      },
+      "position": {
+        "x": 80,
+        "y": 560
+      }
+    },
+    {
+      "id": "chunker",
+      "type": "ingest.chunker",
+      "label": "Chunker Guías",
+      "config": {
+        "strategy": "by-section",
+        "chunkSize": 800,
+        "overlap": 120
+      },
+      "position": {
+        "x": 280,
+        "y": 560
+      }
+    },
+    {
+      "id": "metadata_tagger",
+      "type": "ingest.metadata",
+      "label": "Metadata Clínica",
+      "config": {
+        "fields": [
+          "plan",
+          "condition",
+          "effective_date"
+        ]
+      },
+      "position": {
+        "x": 480,
+        "y": 560
+      }
+    },
+    {
+      "id": "embedding_model",
+      "type": "model.embedding",
+      "label": "Embedding Guías",
+      "config": {
+        "model": "text-embedding-3-large",
+        "local": false,
+        "apiKeyRef": "OPENAI_API_KEY"
+      },
+      "position": {
+        "x": 480,
+        "y": 420
+      }
+    },
+    {
+      "id": "pgvector_store",
+      "type": "store.pgvector",
+      "label": "Store Guías Clínicas",
+      "config": {
+        "index": "clinical_guidelines",
+        "distance": "cosine"
+      },
+      "position": {
+        "x": 680,
+        "y": 490
+      }
+    },
+    {
+      "id": "guidelines_retrieval",
+      "type": "retrieval.vector",
+      "label": "Retrieval Guías",
+      "config": {
+        "topK": 5,
+        "hardFilters": [
+          "plan",
+          "condition"
+        ]
+      },
+      "position": {
+        "x": 880,
+        "y": 490
+      }
+    },
+    {
+      "id": "guidelines_rag_tool",
+      "type": "tool.retriever",
+      "label": "GuidelinesRAG",
+      "config": {
+        "name": "GuidelinesRAG",
+        "description": "Busca criterios de pre-autorización en las guías clínicas del pagador. Filtros duros por plan y condición para evitar mezclar reglas de planes distintos."
+      },
+      "position": {
+        "x": 1080,
+        "y": 490
+      }
+    },
+    {
+      "id": "patient_history_tool",
+      "type": "tool.service",
+      "label": "PatientHistoryService",
+      "config": {
+        "name": "PatientHistoryService",
+        "baseUrl": "https://ehr.internal/api/v1",
+        "operation": "getPatientHistory",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "patient_id": {
+              "type": "string"
+            },
+            "include_diagnoses": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "patient_id"
+          ]
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "patient_id": {
+              "type": "string"
+            },
+            "diagnoses": {
+              "type": "array"
+            },
+            "active_plan": {
+              "type": "string"
+            },
+            "prior_auths": {
+              "type": "array"
+            }
+          }
+        }
+      },
+      "position": {
+        "x": 1080,
+        "y": 320
+      }
+    },
+    {
+      "id": "prior_auth_agent",
+      "type": "agent.react",
+      "label": "Agente Pre-Autorización",
+      "config": {
+        "system": "Eres un asistente clínico especializado en pre-autorización médica. Cuando recibas una solicitud: (1) consulta la historia del paciente con PatientHistoryService, (2) busca los criterios aplicables en GuidelinesRAG usando exactamente el plan y la condición del paciente como filtros, (3) evalúa si la solicitud cumple los criterios documentados, (4) responde SIEMPRE citando la guía clínica que respalda tu decisión. NUNCA apruebes ni rechaces sin cita explícita de la guía. Si el caso es ambiguo, urgente o no existe criterio claro en la guía, indica severidad=alta para escalación.",
+        "maxSteps": 10,
+        "streaming": true
+      },
+      "position": {
+        "x": 680,
+        "y": 300
+      }
+    },
+    {
+      "id": "citations_check",
+      "type": "logic.citations",
+      "label": "Verificador de Citas",
+      "config": {
+        "mode": "enforce"
+      },
+      "position": {
+        "x": 880,
+        "y": 300
+      }
+    },
+    {
+      "id": "escalate_human",
+      "type": "hitl.escalate",
+      "label": "Escalar a Revisor Clínico",
+      "config": {
+        "when": "severidad == 'alta' OR criterio_no_encontrado == true",
+        "assignee": "clinical-reviewer",
+        "timeout": "4h"
+      },
+      "position": {
+        "x": 1080,
+        "y": 160
+      }
+    },
+    {
+      "id": "chat_output",
+      "type": "io.output",
+      "label": "Respuesta al Solicitante",
+      "config": {
+        "format": "markdown",
+        "streaming": true
+      },
+      "position": {
+        "x": 1280,
+        "y": 300
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "chat_input",
+      "sourcePort": "message",
+      "target": "prior_auth_agent",
+      "targetPort": "message",
+      "loop": false
+    },
+    {
+      "source": "llm",
+      "sourcePort": "model",
+      "target": "prior_auth_agent",
+      "targetPort": "model",
+      "loop": false
+    },
+    {
+      "source": "pdf_guidelines",
+      "sourcePort": "documents",
+      "target": "chunker",
+      "targetPort": "documents",
+      "loop": false
+    },
+    {
+      "source": "chunker",
+      "sourcePort": "documents",
+      "target": "metadata_tagger",
+      "targetPort": "documents",
+      "loop": false
+    },
+    {
+      "source": "metadata_tagger",
+      "sourcePort": "documents",
+      "target": "pgvector_store",
+      "targetPort": "documents",
+      "loop": false
+    },
+    {
+      "source": "embedding_model",
+      "sourcePort": "embeddings",
+      "target": "pgvector_store",
+      "targetPort": "embeddings",
+      "loop": false
+    },
+    {
+      "source": "pgvector_store",
+      "sourcePort": "retriever",
+      "target": "guidelines_retrieval",
+      "targetPort": "retriever",
+      "loop": false
+    },
+    {
+      "source": "guidelines_retrieval",
+      "sourcePort": "chunks",
+      "target": "guidelines_rag_tool",
+      "targetPort": "Chunks",
+      "loop": false
+    },
+    {
+      "source": "guidelines_rag_tool",
+      "sourcePort": "tool",
+      "target": "prior_auth_agent",
+      "targetPort": "tools",
+      "loop": false
+    },
+    {
+      "source": "patient_history_tool",
+      "sourcePort": "tool",
+      "target": "prior_auth_agent",
+      "targetPort": "tools",
+      "loop": false
+    },
+    {
+      "source": "prior_auth_agent",
+      "sourcePort": "message",
+      "target": "citations_check",
+      "targetPort": "message",
+      "loop": false
+    },
+    {
+      "source": "citations_check",
+      "sourcePort": "message",
+      "target": "escalate_human",
+      "targetPort": "any",
+      "loop": false
+    },
+    {
+      "source": "escalate_human",
+      "sourcePort": "any",
+      "target": "chat_output",
+      "targetPort": "any",
+      "loop": false
+    },
+    {
+      "source": "guidelines_retrieval",
+      "sourcePort": "Chunks",
+      "target": "citations_check",
+      "targetPort": "Chunks",
+      "loop": false
+    }
+  ],
+  "secrets": [
+    {
+      "name": "ANTHROPIC_API_KEY",
+      "required": true,
+      "usedBy": [
+        "llm"
+      ]
+    },
+    {
+      "name": "OPENAI_API_KEY",
+      "required": true,
+      "usedBy": [
+        "embedding_model"
+      ]
+    },
+    {
+      "name": "DATABASE_URL",
+      "required": true,
+      "usedBy": [
+        "pgvector_store"
+      ]
+    },
+    {
+      "name": "SERVICE_API_KEY",
+      "required": false,
+      "usedBy": [
+        "patient_history_tool"
+      ]
+    },
+    {
+      "name": "JWT_PUBLIC_KEY",
+      "required": true,
+      "usedBy": [
+        "chat_input"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+[project]
+name = "ragorbit"
+version = "1.0.0"
+description = "Constructor visual de estrategias RAG/agénticas que genera artefactos Python desplegables, sin lock-in."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "SlothLabs" }]
+keywords = ["rag", "llm", "agents", "langchain", "langgraph", "codegen", "visual-builder", "no-lock-in"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development :: Code Generators",
+]
+# El engine (spec, registry, validator, contracts, codegen, runtime, server stdlib)
+# no requiere dependencias: corre en cualquier Python 3.10+ recién instalado.
+dependencies = []
+
+[project.urls]
+Homepage = "https://slothlabs.org/ragorbit"
+Documentation = "https://slothlabs.org/ragorbit/docs"
+Repository = "https://github.com/slothlabsorg/ragorbit"
+Course = "https://slothlabs.org/rag-course"
+Issues = "https://github.com/slothlabsorg/ragorbit/issues"
+
+[project.optional-dependencies]
+# Backend de producción (apps/api). El engine stdlib NO lo necesita.
+api = ["fastapi>=0.110", "uvicorn>=0.27"]
+
+[project.scripts]
+ragorbit = "ragorbit.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["ragorbit*"]
+
+[tool.setuptools.package-data]
+ragorbit = ["spec/*.json", "catalog/nodes/*.json", "templates/chat/**/*"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"

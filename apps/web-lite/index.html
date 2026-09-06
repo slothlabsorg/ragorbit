@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RAGorbit · Constructor visual de estrategias RAG/agénticas</title>
+<link rel="stylesheet" href="vendor/reactflow.css" />
+<style>
+  :root { --bg:#0e1116; --panel:#161b22; --border:#2a313c; --accent:#5b8cff; --ok:#2ea043; --warn:#d29922; --err:#f85149; --text:#e6edf3; --muted:#8b949e; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); height:100vh; overflow:hidden; }
+  #root { height:100vh; }
+  .app { display:grid; grid-template-columns: 240px 1fr 320px; grid-template-rows: 48px 1fr; height:100vh; }
+  .topbar { grid-column:1/4; display:flex; align-items:center; gap:12px; padding:0 14px; background:var(--panel); border-bottom:1px solid var(--border); }
+  .brand { font-weight:700; letter-spacing:.3px; }
+  .brand span { color:var(--accent); }
+  .topbar .sel { margin-left:auto; display:flex; gap:8px; align-items:center; }
+  select, button { background:#21262d; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  button:hover { filter:brightness(1.1); }
+  .palette { background:var(--panel); border-right:1px solid var(--border); overflow:auto; padding:8px; }
+  .cat { font-size:11px; text-transform:uppercase; color:var(--muted); margin:10px 4px 4px; letter-spacing:.5px; }
+  .pal-item { background:#21262d; border:1px solid var(--border); border-radius:6px; padding:6px 8px; margin:4px 0; font-size:12px; cursor:grab; }
+  .pal-item:hover { border-color:var(--accent); }
+  .pal-item small { color:var(--muted); display:block; font-size:10px; }
+  .canvas { position:relative; }
+  .inspector { background:var(--panel); border-left:1px solid var(--border); overflow:auto; padding:12px; font-size:13px; }
+  .inspector h3 { margin:0 0 8px; font-size:13px; }
+  .field { margin-bottom:10px; }
+  .field label { display:block; font-size:11px; color:var(--muted); margin-bottom:3px; }
+  .field input, .field textarea, .field select { width:100%; background:#0d1117; border:1px solid var(--border); color:var(--text); border-radius:5px; padding:5px 7px; font-size:12px; }
+  .node { background:#1c2230; border:1px solid var(--border); border-radius:8px; min-width:150px; font-size:12px; }
+  .node .hd { padding:6px 8px; border-bottom:1px solid var(--border); font-weight:600; display:flex; gap:6px; align-items:center;}
+  .node .bd { padding:5px 8px; color:var(--muted); font-size:10px; }
+  .node.sel { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+  .dot { width:8px; height:8px; border-radius:50%; flex:none; }
+  .msg { padding:10px; border-radius:6px; margin-top:8px; font-size:12px; white-space:pre-wrap; }
+  .msg.ok { background:rgba(46,160,67,.12); border:1px solid var(--ok); }
+  .msg.err { background:rgba(248,81,73,.12); border:1px solid var(--err); }
+  .msg.warn { background:rgba(210,153,34,.12); border:1px solid var(--warn); }
+  .chat { background:#0d1117; border:1px solid var(--border); border-radius:6px; padding:10px; margin-top:8px; }
+  .chip { display:inline-block; background:#21262d; border:1px solid var(--border); border-radius:10px; padding:1px 7px; font-size:10px; margin:2px 2px 0 0; }
+  .audit { background:#0d1117; border:1px solid var(--border); border-radius:6px; padding:8px; margin-top:8px; font-size:12px; }
+  .audit h4 { margin:10px 0 4px; font-size:10px; text-transform:uppercase; color:var(--muted); letter-spacing:.5px; }
+  .audit h4:first-child { margin-top:0; }
+  .step { padding:4px 0; border-bottom:1px solid #1b212b; }
+  .step .top { display:flex; gap:6px; align-items:center; }
+  .step .n { color:var(--muted); font-size:10px; min-width:14px; }
+  .step .nm { font-weight:600; }
+  .badge { font-size:9px; padding:1px 6px; border-radius:8px; margin-left:auto; }
+  .badge.ok { background:rgba(46,160,67,.2); color:#3fb950; }
+  .badge.wait { background:rgba(210,153,34,.2); color:#d29922; }
+  .gr { font-size:9px; color:#79c0ff; }
+  .res { color:var(--muted); font-family:ui-monospace,monospace; font-size:10px; word-break:break-all; margin-top:2px; }
+  .ev { font-size:11px; padding:2px 0; color:var(--muted); border-bottom:1px solid #1b212b; }
+  .chatbox { margin-top:10px; }
+  .chatbox h4 { font-size:11px; text-transform:uppercase; color:var(--muted); letter-spacing:.5px; margin:0 0 6px; }
+  .convo { max-height:200px; overflow:auto; display:flex; flex-direction:column; gap:5px; padding:4px; background:#0d1117; border:1px solid var(--border); border-radius:6px; }
+  .bubble { padding:6px 9px; border-radius:10px; font-size:12px; max-width:92%; white-space:pre-wrap; }
+  .bubble.user { align-self:flex-end; background:rgba(31,111,235,.22); border:1px solid rgba(31,111,235,.45); }
+  .bubble.bot { align-self:flex-start; background:#21262d; border:1px solid var(--border); }
+  .bubble.empty { align-self:center; color:var(--muted); background:none; border:none; font-size:11px; }
+  .chatrow { display:flex; gap:6px; margin-top:6px; }
+  .chatrow input { flex:1; background:#0d1117; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:6px 8px; font-size:12px; }
+  .suggest { font-size:10px; color:var(--muted); margin-top:4px; }
+  .suggest a { color:var(--accent); cursor:pointer; }
+  .row { display:flex; gap:6px; }
+  .cat-color { width:8px;height:8px;border-radius:2px;display:inline-block; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<!-- Librerías vendorizadas localmente: UI 100% offline, sin CDN -->
+<script src="vendor/react.js"></script>
+<script src="vendor/react-dom.js"></script>
+<script src="vendor/reactflow.js"></script>
+<script src="vendor/htm.js"></script>
+<script>
+const { useState, useEffect, useCallback, useRef } = React;
+const { createRoot } = ReactDOM;
+const _RF = window.ReactFlow;
+const ReactFlow = _RF.ReactFlow || _RF.default;
+const { Background, Controls, MiniMap, addEdge, applyNodeChanges, applyEdgeChanges, Handle, Position, ReactFlowProvider } = _RF;
+const html = htm.bind(React.createElement);
+const API = ""; // mismo origen
+
+const CAT_COLORS = { io:"#5b8cff", loader:"#d29922", ingest:"#a371f7", store:"#2ea043", retrieval:"#39c5cf",
+  model:"#f778ba", query:"#e3b341", logic:"#db61a2", agent:"#ff7b72", tool:"#79c0ff", guardrail:"#f85149",
+  hitl:"#ffa657", observability:"#56d364" };
+
+// ---- Nodo custom: muestra handles por puerto (id = side:Type) ----
+function RagNode({ data, selected }) {
+  const m = data.manifest || {};
+  const ins = (m.ports && m.ports.inputs) || [];
+  const outs = (m.ports && m.ports.outputs) || [];
+  const color = CAT_COLORS[m.category] || "#888";
+  return html`<div class=${"node"+(selected?" sel":"")}>
+    ${ins.map((p,i) => html`<${Handle} key=${"i"+i} type="target" position=${Position.Left}
+        id=${"in:"+p.type} style=${{top: 26+i*16, background:"#888"}} title=${p.name+" : "+p.type} />`)}
+    <div class="hd"><span class="cat-color" style=${{background:color}}></span>${data.label}</div>
+    <div class="bd">${data.type}</div>
+    ${outs.map((p,i) => html`<${Handle} key=${"o"+i} type="source" position=${Position.Right}
+        id=${"out:"+p.type} style=${{top: 26+i*16, background:color}} title=${p.name+" : "+p.type} />`)}
+  </div>`;
+}
+const nodeTypes = { rag: RagNode };
+
+function App() {
+  const [registry, setRegistry] = useState([]);
+  const [byType, setByType] = useState({});
+  const [templates, setTemplates] = useState([]);
+  const [meta, setMeta] = useState({ id:"nuevo-flujo", name:"Nuevo flujo", deploymentTarget:"chat-service", defaults:{llm:"anthropic:claude-opus-4-8"} });
+  const [nodes, setNodes] = useState([]);
+  const [edges, setEdges] = useState([]);
+  const [sel, setSel] = useState(null);
+  const [feedback, setFeedback] = useState(null);
+  const [convo, setConvo] = useState([]);   // conversación de chat (mock)
+  const [draft, setDraft] = useState("");
+  const [running, setRunning] = useState(false);
+  const wrap = useRef(null);
+  const [rfi, setRfi] = useState(null);
+
+  useEffect(() => {
+    fetch(API+"/api/registry/nodes").then(r=>r.json()).then(d=>{
+      setRegistry(d); const bt={}; d.forEach(m=>bt[m.type]=m); setByType(bt);
+    });
+    fetch(API+"/api/templates").then(r=>r.json()).then(setTemplates);
+  }, []);
+
+  const onNodesChange = useCallback((c)=>setNodes(ns=>applyNodeChanges(c,ns)),[]);
+  const onEdgesChange = useCallback((c)=>setEdges(es=>applyEdgeChanges(c,es)),[]);
+
+  const onConnect = useCallback((params)=>{
+    const sT=(params.sourceHandle||"out:Any").split(":")[1];
+    const tT=(params.targetHandle||"in:Any").split(":")[1];
+    const ok = sT===tT || sT==="Any" || tT==="Any" || (sT==="Message"&&tT==="Query") || (sT==="Query"&&tT==="Message");
+    if(!ok){ setFeedback({type:"err", text:`No se puede conectar ${sT} → ${tT}: tipos incompatibles.`}); return; }
+    // Un self-loop (agente ReAct) o una conexión que cierra ciclo se marca loop:true automáticamente.
+    const isLoop = params.source===params.target;
+    setEdges(es=>addEdge({...params, animated:isLoop, style:isLoop?{stroke:"#d29922",strokeDasharray:"5 4"}:undefined, data:{sT,tT,loop:isLoop}}, es));
+  },[]);
+
+  function loadTemplate(tpl){
+    if(!tpl){ return; }
+    const f = tpl.flow;
+    setMeta(f.flow);
+    setNodes(f.nodes.map(n=>({ id:n.id, type:"rag", position:n.position||{x:0,y:0},
+      data:{label:n.label||n.id, type:n.type, config:n.config||{}, manifest:byType[n.type]} })));
+    setEdges(f.edges.map((e,i)=>({ id:"e"+i, source:e.source, target:e.target,
+      sourceHandle:"out:"+e.sourcePort, targetHandle:"in:"+e.targetPort,
+      animated:!!e.loop, style:e.loop?{stroke:"#d29922",strokeDasharray:"5 4"}:undefined,
+      data:{sT:e.sourcePort,tT:e.targetPort,loop:!!e.loop} })));
+    setFeedback({type:"ok", text:`Template cargado: ${f.flow.name} (${f.nodes.length} nodos).`}); setConvo([]); setSel(null);
+  }
+
+  function onDrop(ev){
+    ev.preventDefault();
+    const type = ev.dataTransfer.getData("application/ragnode"); if(!type) return;
+    const m = byType[type]; if(!m) return;
+    const pos = rfi ? rfi.screenToFlowPosition({x:ev.clientX, y:ev.clientY}) : {x:120,y:120};
+    const id = type.replace(/[^a-z0-9]/gi,"_")+"_"+Math.floor(Math.random()*9999);
+    setNodes(ns=>ns.concat({ id, type:"rag", position:pos,
+      data:{label:m.title, type, config:{...(m.defaults||{})}, manifest:m} }));
+  }
+
+  function toIR(){
+    return { irVersion:"1.0", flow:meta,
+      nodes:nodes.map(n=>({ id:n.id, type:n.data.type, label:n.data.label, config:n.data.config||{}, position:n.position })),
+      edges:edges.map(e=>({ source:e.source, sourcePort:(e.sourceHandle||"out:Any").split(":")[1],
+        target:e.target, targetPort:(e.targetHandle||"in:Any").split(":")[1], loop:!!(e.data&&e.data.loop) })),
+      secrets: collectSecrets() };
+  }
+  function collectSecrets(){
+    const s={};
+    nodes.forEach(n=>{ const m=n.data.manifest||{}; (m.secrets||[]).forEach(x=>{ s[x]=s[x]||{name:x,required:true,usedBy:[]}; s[x].usedBy.push(n.id); });
+      const ref=(n.data.config||{}).apiKeyRef; if(ref){ s[ref]=s[ref]||{name:ref,required:true,usedBy:[]}; s[ref].usedBy.push(n.id);} });
+    return Object.values(s);
+  }
+
+  async function doValidate(){
+    const r = await fetch(API+"/api/validate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({flow:toIR()})});
+    const d = await r.json();
+    if(d.ok) setFeedback({type: d.warnings.length?"warn":"ok", text:`✅ Válido. ${d.warnings.length} warnings.`+(d.warnings.length?"\n• "+d.warnings.slice(0,4).join("\n• "):"")});
+    else setFeedback({type:"err", text:"❌ "+d.errors.length+" errores:\n• "+d.errors.join("\n• ")});
+  }
+  async function sendChat(text){
+    const msg = (text && text.trim()) || "Hola, ¿me ayudas con mi caso?";
+    setConvo(c=>c.concat({role:"user", text:msg}));
+    setDraft(""); setRunning(true);
+    let d;
+    try {
+      const r = await fetch(API+"/api/run-mock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({flow:toIR(), seedMessage:msg})});
+      d = await r.json();
+    } catch(e) { d = {ok:false, errors:[String(e)]}; }
+    setRunning(false);
+    if(!d.ok){ setFeedback({type:"err", text:"❌ "+(d.errors||["error"]).join("\n")}); return; }
+    const resp = typeof d.result.response==="string" ? d.result.response : JSON.stringify(d.result.response);
+    setConvo(c=>c.concat({role:"bot", text:resp, audit:d.result}));
+  }
+  async function doExport(){
+    const r = await fetch(API+"/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({flow:toIR()})});
+    if(!r.ok){ const d=await r.json(); setFeedback({type:"err",text:"❌ "+(d.errors||["error"]).join("\n")}); return; }
+    const blob = await r.blob(); const url = URL.createObjectURL(blob);
+    const a=document.createElement("a"); a.href=url; a.download=meta.id+".zip"; a.click(); URL.revokeObjectURL(url);
+    setFeedback({type:"ok", text:"⬇️ Proyecto exportado: "+meta.id+".zip (incluye app/, mocks/, tests/)."});
+  }
+
+  function updateConfig(key, val){
+    setNodes(ns=>ns.map(n=> n.id===sel?{...n, data:{...n.data, config:{...n.data.config,[key]:val}}}:n));
+  }
+  const selNode = nodes.find(n=>n.id===sel);
+
+  // paleta agrupada
+  const byCat={}; registry.forEach(m=>{ (byCat[m.category]=byCat[m.category]||[]).push(m); });
+
+  return html`<div class="app">
+    <div class="topbar">
+      <div class="brand">🛰️ RAG<span>orbit</span></div>
+      <div class="sel">
+        <select onChange=${e=>loadTemplate(templates.find(t=>t.id===e.target.value))} value="">
+          <option value="">— Galería de templates (10 casos) —</option>
+          ${templates.map(t=>html`<option key=${t.id} value=${t.id}>${t.name}</option>`)}
+        </select>
+        <span style=${{fontSize:11,color:"var(--muted)"}}>${meta.deploymentTarget}</span>
+        <button onClick=${doValidate}>Validar</button>
+        <button onClick=${()=>sendChat(draft)}>Probar con mocks</button>
+        <button class="primary" onClick=${doExport}>Exportar</button>
+      </div>
+    </div>
+
+    <div class="palette">
+      ${Object.keys(byCat).sort().map(cat=>html`<div key=${cat}>
+        <div class="cat"><span class="cat-color" style=${{background:CAT_COLORS[cat]||"#888"}}></span> ${cat}</div>
+        ${byCat[cat].map(m=>html`<div class="pal-item" key=${m.type} draggable=${true}
+            onDragStart=${e=>e.dataTransfer.setData("application/ragnode", m.type)}>
+            ${m.title}<small>${m.type}</small></div>`)}
+      </div>`)}
+    </div>
+
+    <div class="canvas" ref=${wrap} onDragOver=${e=>{e.preventDefault();}} onDrop=${onDrop}>
+      <${ReactFlow} nodes=${nodes} edges=${edges} nodeTypes=${nodeTypes}
+        onNodesChange=${onNodesChange} onEdgesChange=${onEdgesChange} onConnect=${onConnect}
+        onInit=${setRfi} onNodeClick=${(e,n)=>setSel(n.id)} onPaneClick=${()=>setSel(null)} fitView>
+        <${Background} /><${Controls} /><${MiniMap} pannable zoomable />
+      <//>
+    </div>
+
+    <div class="inspector">
+      ${selNode ? html`<div>
+          <h3>${selNode.data.label}</h3>
+          <div style=${{fontSize:11,color:"var(--muted)",marginBottom:8}}>${selNode.data.type}</div>
+          ${renderForm(selNode.data.manifest, selNode.data.config, updateConfig)}
+        </div>`
+        : html`<div>
+          <h3>Inspector</h3>
+          <p style=${{color:"var(--muted)",fontSize:12}}>Carga un template o arrastra nodos desde la paleta. Haz clic en un nodo para configurarlo. Conecta puertos del mismo tipo.</p>
+        </div>`}
+      ${feedback && html`<div class=${"msg "+feedback.type}>${feedback.text}</div>`}
+      <div class="chatbox">
+        <h4>💬 Chat (mock)</h4>
+        <div class="convo">
+          ${convo.length===0?html`<div class="bubble empty">Escribe un mensaje o pulsa "Probar con mocks".</div>`:""}
+          ${convo.map((m,i)=>html`<div class=${"bubble "+m.role} key=${i}>${m.text}</div>`)}
+          ${running?html`<div class="bubble bot">…</div>`:""}
+        </div>
+        <div class="chatrow">
+          <input value=${draft} placeholder="Escribe un mensaje…"
+            onChange=${e=>setDraft(e.target.value)}
+            onKeyDown=${e=>{ if(e.key==="Enter") sendChat(draft); }} />
+          <button class="primary" onClick=${()=>sendChat(draft)} disabled=${running}>Enviar</button>
+        </div>
+        <div class="suggest">Sugerencias: <a onClick=${()=>sendChat("Quiero cambiar mi vuelo SCL-BOG del 15 al 17")}>pedir cambio</a> · <a onClick=${()=>sendChat("Sí, confirmo el cambio")}>confirmar</a></div>
+        ${(()=>{ const last=[...convo].reverse().find(m=>m.role==="bot"); return last && last.audit ? renderAudit(last.audit, true) : ""; })()}
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderForm(manifest, config, onChange){
+  const props = (manifest && manifest.configSchema && manifest.configSchema.properties) || {};
+  const keys = Object.keys(props);
+  if(!keys.length) return html`<p style=${{color:"var(--muted)",fontSize:12}}>Este nodo no requiere configuración.</p>`;
+  return keys.map(k=>{
+    const s = props[k]||{}; const v = config[k];
+    const label = html`<label>${s.title||k}</label>`;
+    if(s.enum) return html`<div class="field" key=${k}>${label}
+      <select value=${v??s.default??""} onChange=${e=>onChange(k,e.target.value)}>
+        ${s.enum.map(o=>html`<option key=${o} value=${o}>${o}</option>`)}</select></div>`;
+    if(s.type==="boolean") return html`<div class="field" key=${k}><label><input type="checkbox" checked=${!!(v??s.default)} onChange=${e=>onChange(k,e.target.checked)} /> ${s.title||k}</label></div>`;
+    if(s.type==="number"||s.type==="integer") return html`<div class="field" key=${k}>${label}
+      <input type="number" value=${v??s.default??0} onChange=${e=>onChange(k,Number(e.target.value))} /></div>`;
+    if(s.type==="object"||s.type==="array") return html`<div class="field" key=${k}>${label}
+      <textarea rows=${3} value=${typeof v==="string"?v:JSON.stringify(v??s.default??(s.type==="array"?[]:{}),null,0)} onChange=${e=>{try{onChange(k,JSON.parse(e.target.value))}catch{onChange(k,e.target.value)}}}></textarea></div>`;
+    const long = k==="system"||k==="template"||k==="description";
+    return html`<div class="field" key=${k}>${label}
+      ${long? html`<textarea rows=${3} value=${v??s.default??""} onChange=${e=>onChange(k,e.target.value)}></textarea>`
+            : html`<input type="text" value=${v??s.default??""} onChange=${e=>onChange(k,e.target.value)} />`}</div>`;
+  });
+}
+
+// Panel de Auditoría: timeline de lo que pasó al ejecutar el flujo en modo mock.
+function renderAudit(chat, skipResponse){
+  const agent = chat.trace && chat.trace.agent;
+  const calls = (agent && agent.tool_calls) || [];
+  const fanout = chat.trace && chat.trace.fanout;
+  const cits = chat.citations||[], esc = chat.escalations||[], notif = chat.notifications||[], audit = chat.audit||[];
+  const j = (o)=> typeof o==="string"?o:JSON.stringify(o);
+  const empty = !calls.length && !fanout && !cits.length && !esc.length && !audit.length && !notif.length;
+  if (skipResponse && empty) return "";
+  return html`<div class="audit">
+    ${skipResponse?"":html`<h4>🤖 Respuesta</h4>
+    <div>${typeof chat.response==="string"?chat.response:html`<pre style=${{whiteSpace:"pre-wrap",margin:0}}>${j(chat.response)}</pre>`}</div>`}
+
+    ${calls.length?html`<h4>🧭 Herramientas llamadas (orden)</h4>`:""}
+    ${calls.map((c,i)=>html`<div class="step" key=${"c"+i}>
+        <div class="top"><span class="n">${i+1}</span><span class="nm">${c.name}</span>
+          <span class=${"badge "+(c.status==="pendiente-confirmación"?"wait":"ok")}>${c.status||"ejecutado"}</span></div>
+        ${c.wrappers&&c.wrappers.length?html`<div class="gr">🛡️ ${c.wrappers.join(", ")}</div>`:""}
+        ${c.result?html`<div class="res">→ ${j(c.result)}</div>`:""}
+      </div>`)}
+    ${agent && agent.needs_confirm?html`<div class="gr" style=${{color:"#d29922",marginTop:4}}>⚠ confirm-gate activo: espera confirmación del usuario antes de ejecutar el pago.</div>`:""}
+
+    ${fanout?html`<h4>⚡ Fan-out (event-worker)</h4><div class="ev">${fanout.processed} eventos procesados · concurrencia ${fanout.concurrency}</div>`:""}
+
+    ${cits.length?html`<h4>📚 Citas (${cits.length})</h4>
+      ${cits.map((c,i)=>html`<div class="ev" key=${i}>${c.source||c.node||j(c)}${c.enforced?" · obligatoria":""}</div>`)}`:""}
+
+    ${esc.length?html`<h4>🙋 Escalaciones a humano (${esc.length})</h4>
+      ${esc.map((e,i)=>html`<div class="ev" key=${i}>${e.assignee||"humano"} — ${e.reason||""}</div>`)}`:""}
+
+    ${audit.length?html`<h4>📝 Audit trail (${audit.length})</h4>
+      ${audit.map((e,i)=>html`<div class="ev" key=${i}>${e.node} → ${e.sink||"log"}: ${(""+j(e.payload)).slice(0,80)}…</div>`)}`:""}
+
+    ${notif.length?html`<h4>📨 Notificaciones (${notif.length})</h4>
+      ${notif.map((n,i)=>html`<div class="ev" key=${i}>${(n.channels||[]).join(", ")}</div>`)}`:""}
+  </div>`;
+}
+
+createRoot(document.getElementById("root")).render(html`<${ReactFlowProvider}><${App} /><//>`);
+</script>
+</body>
+</html>

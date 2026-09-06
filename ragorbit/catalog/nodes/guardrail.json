@@ -1,0 +1,102 @@
+[
+  {
+    "type": "guardrail.pre-tool",
+    "category": "guardrail",
+    "title": "Guardrail — Pre-tool",
+    "description": "Validación antes de ejecutar un tool (límites de monto, no-downgrade de cabina).",
+    "ports": {
+      "inputs": [
+        { "name": "Tool", "type": "Tool" }
+      ],
+      "outputs": [
+        { "name": "Tool", "type": "Tool" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "checks": {
+          "type": "array",
+          "items": { "type": "object" },
+          "title": "Reglas de validación (when → deny/allow)"
+        }
+      }
+    },
+    "emitter": "guardrail.pre-tool",
+    "mock": { "behavior": "guardrail_pretool" }
+  },
+  {
+    "type": "guardrail.confirm",
+    "category": "guardrail",
+    "title": "Guardrail — Confirmación explícita",
+    "description": "Exige confirmación explícita si se supera un umbral.",
+    "ports": {
+      "inputs": [
+        { "name": "Tool", "type": "Tool" }
+      ],
+      "outputs": [
+        { "name": "Tool", "type": "Tool" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "threshold": { "type": "string", "title": "Umbral de activación (p.ej. amount > 500)" },
+        "message": { "type": "string", "title": "Mensaje de confirmación al usuario" }
+      }
+    },
+    "emitter": "guardrail.confirm",
+    "mock": { "behavior": "guardrail_confirm" }
+  },
+  {
+    "type": "guardrail.idempotency",
+    "category": "guardrail",
+    "title": "Guardrail — Idempotencia",
+    "description": "Hace idempotente un tool transaccional (clave por PNR+session).",
+    "ports": {
+      "inputs": [
+        { "name": "Tool", "type": "Tool" }
+      ],
+      "outputs": [
+        { "name": "Tool", "type": "Tool" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "keyFields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "title": "Campos que forman la clave de idempotencia"
+        },
+        "ttl": { "type": "string", "default": "24h", "title": "Tiempo de vida de la clave" }
+      }
+    },
+    "emitter": "guardrail.idempotency",
+    "mock": { "behavior": "guardrail_idempotency" }
+  },
+  {
+    "type": "guardrail.resilience",
+    "category": "guardrail",
+    "title": "Guardrail — Resiliencia",
+    "description": "Circuit breaker + retry + fallback ante servicio degradado.",
+    "ports": {
+      "inputs": [
+        { "name": "Tool", "type": "Tool" }
+      ],
+      "outputs": [
+        { "name": "Tool", "type": "Tool" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "retries": { "type": "integer", "default": 2, "title": "Reintentos" },
+        "breakerThreshold": { "type": "number", "default": 0.5, "title": "Umbral del circuit breaker (tasa de error)" },
+        "fallbackMessage": { "type": "string", "title": "Mensaje de fallback al usuario" }
+      }
+    },
+    "emitter": "guardrail.resilience",
+    "mock": { "behavior": "guardrail_resilience" }
+  }
+]

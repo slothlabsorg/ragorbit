@@ -1,0 +1,53 @@
+[
+  {
+    "type": "agent.react",
+    "category": "agent",
+    "title": "Agente ReAct",
+    "description": "Orchestrator create_agent (ReAct): razona y llama tools en lenguaje natural.",
+    "ports": {
+      "inputs": [
+        { "name": "Model", "type": "Model" },
+        { "name": "Tool", "type": "Tool", "multi": true },
+        { "name": "Retriever", "type": "Retriever", "multi": true },
+        { "name": "Message", "type": "Message" }
+      ],
+      "outputs": [
+        { "name": "Message", "type": "Message" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "system": { "type": "string", "title": "System prompt" },
+        "maxSteps": { "type": "integer", "default": 8, "title": "Pasos máximos" },
+        "streaming": { "type": "boolean", "default": true, "title": "Streaming" }
+      }
+    },
+    "emitter": "agent.react",
+    "mock": { "behavior": "agent_react" }
+  },
+  {
+    "type": "agent.fanout",
+    "category": "agent",
+    "title": "Agente Fan-out",
+    "description": "Despacha N sub-agentes stateless en paralelo (por batch/partición).",
+    "ports": {
+      "inputs": [
+        { "name": "Event", "type": "Event" },
+        { "name": "Tool", "type": "Tool", "multi": true }
+      ],
+      "outputs": [
+        { "name": "Any", "type": "Any" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "concurrency": { "type": "integer", "default": 16, "title": "Concurrencia máxima" },
+        "subAgentSystem": { "type": "string", "title": "System prompt del sub-agente" }
+      }
+    },
+    "emitter": "agent.fanout",
+    "mock": { "behavior": "agent_fanout" }
+  }
+]

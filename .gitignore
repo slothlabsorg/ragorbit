@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+venv/
+.venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Artefactos generados por el codegen (se regeneran con `ragorbit generate`)
+demo/generated/
+/build/
+
+# Salidas de build. dist/install.sh SÍ se versiona: es el script que sirve
+# slothlabs.org/install/ragorbit, no un artefacto.
+/dist/*
+!/dist/install.sh
+
+# El curso vive en su propio repo: github.com/slothlabsorg/rag-course
+# Aquí quedaba una copia que se desincronizaba en silencio; se ignora el
+# contenido pero se publica el README que apunta al repo nuevo.
+/rag-training/*
+!/rag-training/README.md
+
+# Entorno / secretos
+.env
+.env.local
+*.pem
+*.key
+
+# Node (apps/web y el vendor de web-lite sí se versionan)
+node_modules/
+.next/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

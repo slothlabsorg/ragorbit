@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ragorbit.dev/schemas/manifest.schema.json",
+  "title": "RAGorbit Node Manifest",
+  "description": "Definición declarativa de un tipo de nodo del catálogo. Ver docs/01-concepts.md §7 y docs/05-extending.md.",
+  "type": "object",
+  "required": ["type", "category", "title", "ports"],
+  "additionalProperties": true,
+  "properties": {
+    "type": { "type": "string", "pattern": "^[a-z]+\\.[a-z0-9-]+$" },
+    "category": {
+      "type": "string",
+      "enum": ["io", "loader", "ingest", "store", "retrieval", "model",
+               "query", "logic", "agent", "tool", "guardrail", "hitl", "observability"]
+    },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "ports": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "inputs": { "type": "array", "items": { "$ref": "#/$defs/port" } },
+        "outputs": { "type": "array", "items": { "$ref": "#/$defs/port" } }
+      }
+    },
+    "configSchema": { "type": "object" },
+    "secrets": { "type": "array", "items": { "type": "string" } },
+    "emitter": {
+      "type": "string",
+      "description": "Nombre del emisor de codegen registrado (ragorbit.emitters). Para nodos custom, puede apuntar a una plantilla."
+    },
+    "mock": {
+      "type": "object",
+      "description": "Comportamiento de modo mock: 'behavior' es la clave del runtime mock; 'fixtures' datos de muestra.",
+      "additionalProperties": true,
+      "properties": {
+        "behavior": { "type": "string" },
+        "fixtures": { "type": "object" }
+      }
+    }
+  },
+  "$defs": {
+    "port": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": ["Documents", "Embeddings", "Retriever", "Chunks", "Model",
+                   "Tool", "Message", "Query", "Decision", "Event", "Audio", "Any"]
+        },
+        "required": { "type": "boolean", "default": false },
+        "multi": { "type": "boolean", "default": false,
+                   "description": "Acepta múltiples conexiones (p.ej. tools de un agente)." }
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "type": "hitl.escalate",
+    "category": "hitl",
+    "title": "HITL — Escalado humano",
+    "description": "Interrumpe y escala a un humano (inspector/agente) en casos críticos.",
+    "ports": {
+      "inputs": [
+        { "name": "Any", "type": "Any" }
+      ],
+      "outputs": [
+        { "name": "Any", "type": "Any" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "when": { "type": "string", "title": "Condición de escalado (p.ej. severidad WARNING)" },
+        "assignee": { "type": "string", "title": "Asignado (rol o ID del agente humano)" },
+        "timeout": { "type": "string", "title": "Tiempo máximo de espera antes de continuar/abortar" }
+      }
+    },
+    "emitter": "hitl.escalate",
+    "mock": { "behavior": "hitl_escalate" }
+  }
+]

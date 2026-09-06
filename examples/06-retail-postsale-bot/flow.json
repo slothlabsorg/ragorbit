@@ -1,0 +1,223 @@
+{
+  "irVersion": "1.0",
+  "flow": {
+    "id": "retail-postsale-bot",
+    "name": "Bot de post-venta retail",
+    "description": "Asistente conversacional de post-venta para e-commerce: consulta pedidos, inicia devoluciones con confirmación de monto y recomienda productos relacionados.",
+    "deploymentTarget": "chat-service",
+    "defaults": { "llm": "anthropic:claude-opus-4-8" }
+  },
+  "nodes": [
+    {
+      "id": "chat_input",
+      "type": "io.input",
+      "label": "Chat Input",
+      "config": {
+        "channel": "chat",
+        "auth": "jwt",
+        "streaming": true
+      },
+      "position": { "x": 60, "y": 300 }
+    },
+    {
+      "id": "llm",
+      "type": "model.llm",
+      "label": "Claude Opus 4.8",
+      "config": {
+        "model": "anthropic:claude-opus-4-8",
+        "temperature": 0.2,
+        "apiKeyRef": "ANTHROPIC_API_KEY"
+      },
+      "position": { "x": 320, "y": 100 }
+    },
+    {
+      "id": "order_tool",
+      "type": "tool.service",
+      "label": "OrderService",
+      "config": {
+        "name": "OrderService",
+        "baseUrl": "https://api.retail.internal/orders",
+        "operation": "getOrdersByCustomer",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "email": { "type": "string" },
+            "order_id": { "type": "string" }
+          }
+        },
+        "outputSchema": { "type": "object" }
+      },
+      "position": { "x": 600, "y": 460 }
+    },
+    {
+      "id": "return_tool",
+      "type": "tool.service",
+      "label": "ReturnService",
+      "config": {
+        "name": "ReturnService",
+        "baseUrl": "https://api.retail.internal/returns",
+        "operation": "initiateReturn",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "order_id": { "type": "string" },
+            "session_id": { "type": "string" },
+            "reason": { "type": "string" },
+            "amount": { "type": "number" }
+          },
+          "required": ["order_id", "session_id", "reason", "amount"]
+        },
+        "outputSchema": { "type": "object" }
+      },
+      "position": { "x": 600, "y": 620 }
+    },
+    {
+      "id": "return_confirm",
+      "type": "guardrail.confirm",
+      "label": "Confirm reembolso > 200",
+      "config": {
+        "threshold": "amount > 200",
+        "message": "El reembolso supera $200. ¿Confirmas que deseas iniciar la devolución por este monto?"
+      },
+      "position": { "x": 820, "y": 560 }
+    },
+    {
+      "id": "return_idempotency",
+      "type": "guardrail.idempotency",
+      "label": "Idempotency order_id+session",
+      "config": {
+        "keyFields": ["order_id", "session_id"],
+        "ttl": "24h"
+      },
+      "position": { "x": 1040, "y": 560 }
+    },
+    {
+      "id": "recommendation_tool",
+      "type": "tool.service",
+      "label": "RecommendationService",
+      "config": {
+        "name": "RecommendationService",
+        "baseUrl": "https://api.retail.internal/recommendations",
+        "operation": "getRecommendations",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "order_id": { "type": "string" },
+            "email": { "type": "string" }
+          }
+        },
+        "outputSchema": { "type": "object" }
+      },
+      "position": { "x": 600, "y": 780 }
+    },
+    {
+      "id": "postsale_agent",
+      "type": "agent.react",
+      "label": "Agente ReAct — Post-venta",
+      "config": {
+        "system": "Eres un asistente de post-venta para una tienda e-commerce. Tu misión es ayudar al cliente con: (1) estado e historial de sus pedidos, (2) iniciar devoluciones o reembolsos de forma segura, y (3) recomendar productos complementarios. Siempre identifica al cliente por email o ID de pedido antes de dar información. Para devoluciones, verifica el monto y solicita confirmación explícita si supera el umbral. Sé empático, claro y conciso.",
+        "maxSteps": 8,
+        "streaming": true
+      },
+      "position": { "x": 700, "y": 300 }
+    },
+    {
+      "id": "audit",
+      "type": "observability.audit",
+      "label": "Audit Trail",
+      "config": {
+        "sink": "log",
+        "topic": "postsale-audit"
+      },
+      "position": { "x": 1060, "y": 300 }
+    },
+    {
+      "id": "chat_output",
+      "type": "io.output",
+      "label": "Chat Output",
+      "config": {
+        "format": "markdown",
+        "streaming": true
+      },
+      "position": { "x": 1280, "y": 300 }
+    }
+  ],
+  "edges": [
+    {
+      "source": "chat_input",
+      "sourcePort": "Message",
+      "target": "postsale_agent",
+      "targetPort": "Message",
+      "loop": false
+    },
+    {
+      "source": "llm",
+      "sourcePort": "Model",
+      "target": "postsale_agent",
+      "targetPort": "Model",
+      "loop": false
+    },
+    {
+      "source": "order_tool",
+      "sourcePort": "Tool",
+      "target": "postsale_agent",
+      "targetPort": "Tool",
+      "loop": false
+    },
+    {
+      "source": "return_tool",
+      "sourcePort": "Tool",
+      "target": "return_confirm",
+      "targetPort": "Tool",
+      "loop": false
+    },
+    {
+      "source": "return_confirm",
+      "sourcePort": "Tool",
+      "target": "return_idempotency",
+      "targetPort": "Tool",
+      "loop": false
+    },
+    {
+      "source": "return_idempotency",
+      "sourcePort": "Tool",
+      "target": "postsale_agent",
+      "targetPort": "Tool",
+      "loop": false
+    },
+    {
+      "source": "recommendation_tool",
+      "sourcePort": "Tool",
+      "target": "postsale_agent",
+      "targetPort": "Tool",
+      "loop": false
+    },
+    {
+      "source": "postsale_agent",
+      "sourcePort": "Message",
+      "target": "audit",
+      "targetPort": "Any",
+      "loop": false
+    },
+    {
+      "source": "audit",
+      "sourcePort": "Any",
+      "target": "chat_output",
+      "targetPort": "Any",
+      "loop": false
+    },
+    {
+      "source": "postsale_agent",
+      "sourcePort": "Message",
+      "target": "postsale_agent",
+      "targetPort": "Message",
+      "loop": true
+    }
+  ],
+  "secrets": [
+    { "name": "ANTHROPIC_API_KEY",        "required": true,  "usedBy": ["llm"] },
+    { "name": "ORDER_SERVICE_API_KEY",    "required": true,  "usedBy": ["order_tool"] },
+    { "name": "RETURN_SERVICE_API_KEY",   "required": true,  "usedBy": ["return_tool"] },
+    { "name": "RECOMMENDATION_API_KEY",   "required": true,  "usedBy": ["recommendation_tool"] }
+  ]
+}

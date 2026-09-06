@@ -1,0 +1,112 @@
+[
+  {
+    "type": "loader.pdf",
+    "category": "loader",
+    "title": "Cargador PDF",
+    "description": "Carga PDFs (texto). Produce Documents.",
+    "ports": {
+      "outputs": [{ "name": "Documents", "type": "Documents" }]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "path": { "type": "string", "title": "Ruta / bucket" },
+        "ocr": { "type": "boolean", "default": false, "title": "OCR" }
+      }
+    },
+    "emitter": "loader.pdf",
+    "mock": { "behavior": "load_documents" }
+  },
+  {
+    "type": "loader.multimodal",
+    "category": "loader",
+    "title": "Cargador Multimodal",
+    "description": "PDFs con tablas → JSON y diagramas → vision → texto; preserva referencias cruzadas.",
+    "ports": {
+      "outputs": [{ "name": "Documents", "type": "Documents" }]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "extractTables": { "type": "boolean", "default": true, "title": "Extraer tablas" },
+        "describeImages": { "type": "boolean", "default": true, "title": "Describir imágenes" },
+        "sectionScheme": { "type": "string", "title": "Esquema de sección (p.ej. ATA)" }
+      }
+    },
+    "emitter": "loader.multimodal",
+    "mock": { "behavior": "load_documents" }
+  },
+  {
+    "type": "loader.tabular",
+    "category": "loader",
+    "title": "Cargador Tabular",
+    "description": "Carga CSV/Parquet/Excel (p.ej. datos financieros).",
+    "ports": {
+      "outputs": [{ "name": "Documents", "type": "Documents" }]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "path": { "type": "string", "title": "Ruta" },
+        "schemaHint": { "type": "string", "title": "Pista de esquema" }
+      }
+    },
+    "emitter": "loader.tabular",
+    "mock": { "behavior": "load_documents" }
+  },
+  {
+    "type": "loader.web",
+    "category": "loader",
+    "title": "Cargador Web",
+    "description": "Carga páginas web y sitemaps.",
+    "ports": {
+      "outputs": [{ "name": "Documents", "type": "Documents" }]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "urls": { "type": "array", "items": { "type": "string" }, "title": "URLs" },
+        "crawlDepth": { "type": "integer", "default": 0, "title": "Profundidad de crawl" }
+      }
+    },
+    "emitter": "loader.web",
+    "mock": { "behavior": "load_documents" }
+  },
+  {
+    "type": "loader.s3",
+    "category": "loader",
+    "title": "Cargador S3/GCS",
+    "description": "Carga objetos desde S3 o GCS.",
+    "ports": {
+      "outputs": [{ "name": "Documents", "type": "Documents" }]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "bucket": { "type": "string", "title": "Bucket" },
+        "prefix": { "type": "string", "title": "Prefijo" }
+      }
+    },
+    "secrets": ["STORAGE_KEY"],
+    "emitter": "loader.s3",
+    "mock": { "behavior": "load_documents" }
+  },
+  {
+    "type": "loader.sql",
+    "category": "loader",
+    "title": "Cargador SQL",
+    "description": "Convierte filas de una base de datos en documentos.",
+    "ports": {
+      "outputs": [{ "name": "Documents", "type": "Documents" }]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "query": { "type": "string", "title": "Query SQL" }
+      }
+    },
+    "secrets": ["DATABASE_URL"],
+    "emitter": "loader.sql",
+    "mock": { "behavior": "load_documents" }
+  }
+]

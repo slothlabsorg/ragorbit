@@ -1,0 +1,111 @@
+[
+  {
+    "type": "tool.service",
+    "category": "tool",
+    "title": "Tool — Servicio HTTP",
+    "description": "Tool genérico hacia un servicio HTTP (declara operación + esquemas I/O).",
+    "ports": {
+      "outputs": [
+        { "name": "Tool", "type": "Tool" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "title": "Nombre del tool" },
+        "baseUrl": { "type": "string", "title": "URL base del servicio" },
+        "operation": { "type": "string", "title": "Operación (endpoint/acción)" },
+        "inputSchema": { "type": "object", "title": "JSON Schema de entrada" },
+        "outputSchema": { "type": "object", "title": "JSON Schema de salida" }
+      }
+    },
+    "secrets": ["SERVICE_API_KEY"],
+    "emitter": "tool.service",
+    "mock": { "behavior": "tool_service" }
+  },
+  {
+    "type": "tool.http",
+    "category": "tool",
+    "title": "Tool — HTTP simple",
+    "description": "Llamada HTTP simple parametrizada.",
+    "ports": {
+      "outputs": [
+        { "name": "Tool", "type": "Tool" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "method": { "type": "string", "default": "GET", "title": "Método HTTP" },
+        "urlTemplate": { "type": "string", "title": "Plantilla de URL" }
+      }
+    },
+    "emitter": "tool.http",
+    "mock": { "behavior": "tool_service" }
+  },
+  {
+    "type": "tool.function",
+    "category": "tool",
+    "title": "Tool — Función Python",
+    "description": "Función Python custom (snippet que tú pegas).",
+    "ports": {
+      "outputs": [
+        { "name": "Tool", "type": "Tool" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "title": "Nombre de la función" },
+        "signature": { "type": "string", "title": "Firma de la función" },
+        "body": { "type": "string", "title": "Cuerpo de la función (código Python)" }
+      }
+    },
+    "emitter": "tool.function",
+    "mock": { "behavior": "tool_service" }
+  },
+  {
+    "type": "tool.mcp",
+    "category": "tool",
+    "title": "Tool — MCP",
+    "description": "Tool servida por un servidor MCP.",
+    "ports": {
+      "outputs": [
+        { "name": "Tool", "type": "Tool" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "server": { "type": "string", "title": "Nombre/URL del servidor MCP" },
+        "tool": { "type": "string", "title": "Nombre del tool en el servidor MCP" }
+      }
+    },
+    "emitter": "tool.mcp",
+    "mock": { "behavior": "tool_service" }
+  },
+  {
+    "type": "tool.retriever",
+    "category": "tool",
+    "title": "Tool — Retriever",
+    "description": "Expone un Retriever como tool del agente (p.ej. PolicyRAG).",
+    "ports": {
+      "inputs": [
+        { "name": "Retriever", "type": "Retriever" },
+        { "name": "Chunks", "type": "Chunks" }
+      ],
+      "outputs": [
+        { "name": "Tool", "type": "Tool" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "default": "search", "title": "Nombre del tool de búsqueda" },
+        "description": { "type": "string", "title": "Descripción del tool (para el agente)" }
+      }
+    },
+    "emitter": "tool.retriever",
+    "mock": { "behavior": "tool_retriever" }
+  }
+]

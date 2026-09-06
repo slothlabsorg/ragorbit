@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{FLOW_NAME}} · RAGorbit</title>
+  <style>
+    :root { --bg:#0f1117; --panel:#1a1d27; --accent:#5b8def; --text:#e8eaef; --muted:#8b92a8; --ok:#3dd68c; --warn:#f5c542; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--text); min-height:100vh; display:flex; flex-direction:column; }
+    header { padding:1rem 1.5rem; border-bottom:1px solid #2a2f3d; display:flex; justify-content:space-between; align-items:center; }
+    header h1 { margin:0; font-size:1.1rem; font-weight:600; }
+    header span { color:var(--muted); font-size:.85rem; }
+    main { flex:1; display:grid; grid-template-columns:1fr 320px; gap:0; max-width:1200px; width:100%; margin:0 auto; }
+    #chat { display:flex; flex-direction:column; border-right:1px solid #2a2f3d; min-height:calc(100vh - 60px); }
+    #messages { flex:1; overflow-y:auto; padding:1rem; display:flex; flex-direction:column; gap:.75rem; }
+    .msg { max-width:85%; padding:.75rem 1rem; border-radius:12px; line-height:1.5; white-space:pre-wrap; }
+    .msg.user { align-self:flex-end; background:var(--accent); color:#fff; }
+    .msg.bot { align-self:flex-start; background:var(--panel); border:1px solid #2a2f3d; }
+    .msg.system { align-self:center; color:var(--muted); font-size:.85rem; background:transparent; }
+    #composer { display:flex; gap:.5rem; padding:1rem; border-top:1px solid #2a2f3d; }
+    #input { flex:1; padding:.75rem 1rem; border-radius:8px; border:1px solid #2a2f3d; background:#12151c; color:var(--text); font-size:1rem; }
+    button { padding:.75rem 1.25rem; border:none; border-radius:8px; background:var(--accent); color:#fff; font-weight:600; cursor:pointer; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    button.secondary { background:#2a3142; }
+    aside { padding:1rem; font-size:.82rem; overflow-y:auto; }
+    aside h2 { font-size:.9rem; margin:0 0 .5rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+    #tools, #mode { background:var(--panel); border:1px solid #2a2f3d; border-radius:8px; padding:.75rem; margin-bottom:1rem; }
+    .tool { margin:.35rem 0; }
+    .tool .st { color:var(--warn); }
+    .tool .ok { color:var(--ok); }
+    pre { margin:0; white-space:pre-wrap; word-break:break-word; font-size:.75rem; color:var(--muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🛰️ {{FLOW_NAME}}</h1>
+    <span id="mode-label">cargando…</span>
+  </header>
+  <main>
+    <section id="chat">
+      <div id="messages">
+        <div class="msg system">Escribe tu solicitud. Ejemplo: «Quiero cambiar mi vuelo SCL-BOG del 15 al 17»</div>
+      </div>
+      <div id="composer">
+        <input id="input" placeholder="Tu mensaje…" autocomplete="off" />
+        <button id="send">Enviar</button>
+        <button id="confirm" class="secondary" style="display:none">Confirmar</button>
+      </div>
+    </section>
+    <aside>
+      <h2>Modo</h2>
+      <div id="mode"><pre id="mode-info">—</pre></div>
+      <h2>Tools / guardrails</h2>
+      <div id="tools"><pre id="tools-info">—</pre></div>
+    </aside>
+  </main>
+  <script>
+    const sessionId = 'web-' + Math.random().toString(36).slice(2, 10);
+    const messages = document.getElementById('messages');
+    const input = document.getElementById('input');
+    const sendBtn = document.getElementById('send');
+    const confirmBtn = document.getElementById('confirm');
+    let needsConfirm = false;
+
+    function addMsg(text, who) {
+      const d = document.createElement('div');
+      d.className = 'msg ' + who;
+      d.textContent = text;
+      messages.appendChild(d);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    async function refreshHealth() {
+      const h = await fetch('/health').then(r => r.json());
+      document.getElementById('mode-label').textContent = h.llm ? 'Claude + APIs' : (h.integration ? 'integración HTTP' : (h.mock ? 'mock' : 'real'));
+      document.getElementById('mode-info').textContent = JSON.stringify(h, null, 2);
+    }
+
+    function showTools(data) {
+      const lines = (data.tool_calls || []).map(t => {
+        const w = (t.wrappers || []).join(', ') || '—';
+        const st = t.status || '';
+        const cls = st.includes('pendiente') ? 'st' : 'ok';
+        return `${t.name} [${w}] <span class="${cls}">${st}</span>`;
+      });
+      document.getElementById('tools-info').innerHTML = lines.length ? lines.join('\n') : '—';
+      if (data.calls && data.calls.length) {
+        document.getElementById('tools-info').textContent += '\n\nHTTP:\n' +
+          data.calls.map((c,i) => `${i+1}. ${c.service}/${c.operation}`).join('\n');
+      }
+    }
+
+    async function sendMessage(text) {
+      if (!text.trim()) return;
+      addMsg(text, 'user');
+      input.value = '';
+      sendBtn.disabled = true;
+      try {
+        const res = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, session_id: sessionId }),
+        });
+        const data = await res.json();
+        addMsg(data.response || JSON.stringify(data), 'bot');
+        showTools(data);
+        needsConfirm = !!data.needs_confirm;
+        confirmBtn.style.display = needsConfirm ? 'inline-block' : 'none';
+      } catch (e) {
+        addMsg('Error: ' + e, 'system');
+      }
+      sendBtn.disabled = false;
+    }
+
+    sendBtn.onclick = () => sendMessage(input.value);
+    input.onkeydown = e => { if (e.key === 'Enter') sendMessage(input.value); };
+    confirmBtn.onclick = () => sendMessage('Sí, confirmo el cambio.');
+    refreshHealth();
+  </script>
+</body>
+</html>

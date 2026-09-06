@@ -1,0 +1,374 @@
+{
+  "irVersion": "1.0",
+  "flow": {
+    "id": "airline-flight-change",
+    "name": "Agente de cambio de vuelo",
+    "description": "Pasajero cambia su vuelo en lenguaje natural; el agente consulta reservas, políticas tarifarias y disponibilidad, calcula el diferencial de precio y ejecuta el pago de forma idempotente.",
+    "deploymentTarget": "chat-service",
+    "defaults": { "llm": "anthropic:claude-opus-4-8" }
+  },
+  "nodes": [
+    {
+      "id": "chat_input",
+      "type": "io.input",
+      "label": "Chat Input",
+      "config": {
+        "channel": "chat",
+        "auth": "booking-token",
+        "streaming": true
+      },
+      "position": { "x": 60, "y": 300 }
+    },
+    {
+      "id": "llm",
+      "type": "model.llm",
+      "label": "Claude Opus 4.8",
+      "config": {
+        "model": "anthropic:claude-opus-4-8",
+        "temperature": 0.2,
+        "apiKeyRef": "ANTHROPIC_API_KEY"
+      },
+      "position": { "x": 320, "y": 100 }
+    },
+    {
+      "id": "embedding_model",
+      "type": "model.embedding",
+      "label": "Embedding Model",
+      "config": {
+        "model": "text-embedding-3-large",
+        "local": false,
+        "apiKeyRef": "OPENAI_API_KEY"
+      },
+      "position": { "x": 320, "y": 660 }
+    },
+    {
+      "id": "policy_pdf",
+      "type": "loader.pdf",
+      "label": "Políticas IATA / Fare Rules PDF",
+      "config": {
+        "bucket": "s3://airline-docs/fare-rules",
+        "ocr": false
+      },
+      "position": { "x": 60, "y": 760 }
+    },
+    {
+      "id": "policy_chunker",
+      "type": "ingest.chunker",
+      "label": "Chunker by-clause",
+      "config": {
+        "strategy": "by-clause",
+        "chunkSize": 800,
+        "overlap": 100
+      },
+      "position": { "x": 280, "y": 760 }
+    },
+    {
+      "id": "policy_metadata",
+      "type": "ingest.metadata",
+      "label": "Metadata fare_class / route_type",
+      "config": {
+        "fields": ["fare_class", "route_type", "effective_date"]
+      },
+      "position": { "x": 500, "y": 760 }
+    },
+    {
+      "id": "policy_store",
+      "type": "store.pgvector",
+      "label": "PgVector fare_rules",
+      "config": {
+        "index": "fare_rules",
+        "distance": "cosine"
+      },
+      "position": { "x": 720, "y": 760 }
+    },
+    {
+      "id": "policy_tool",
+      "type": "tool.retriever",
+      "label": "PolicyRAG Tool",
+      "config": {
+        "name": "policy_rag",
+        "description": "Consulta reglas de tarifa y penalidades de cambio filtradas por fare_class y route_type. Úsala para determinar si aplican cargos y cuánto son."
+      },
+      "position": { "x": 940, "y": 660 }
+    },
+    {
+      "id": "reservation_tool",
+      "type": "tool.service",
+      "label": "ReservationService",
+      "config": {
+        "name": "ReservationService",
+        "baseUrl": "https://api.airline.internal/reservations",
+        "operation": "getItinerary",
+        "inputSchema": {
+          "type": "object",
+          "properties": { "pnr": { "type": "string" } },
+          "required": ["pnr"]
+        },
+        "outputSchema": { "type": "object" }
+      },
+      "position": { "x": 720, "y": 500 }
+    },
+    {
+      "id": "inventory_tool",
+      "type": "tool.service",
+      "label": "InventoryService",
+      "config": {
+        "name": "InventoryService",
+        "baseUrl": "https://api.airline.internal/inventory",
+        "operation": "searchFlights",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "origin":      { "type": "string" },
+            "destination": { "type": "string" },
+            "date":        { "type": "string" }
+          },
+          "required": ["origin", "destination", "date"]
+        },
+        "outputSchema": { "type": "object" }
+      },
+      "position": { "x": 940, "y": 400 }
+    },
+    {
+      "id": "pricing_tool",
+      "type": "tool.service",
+      "label": "PricingService",
+      "config": {
+        "name": "PricingService",
+        "baseUrl": "https://api.airline.internal/pricing",
+        "operation": "calculateDelta",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "pnr":         { "type": "string" },
+            "newFlightId": { "type": "string" }
+          },
+          "required": ["pnr", "newFlightId"]
+        },
+        "outputSchema": { "type": "object" }
+      },
+      "position": { "x": 940, "y": 520 }
+    },
+    {
+      "id": "payment_service",
+      "type": "tool.service",
+      "label": "PaymentService",
+      "config": {
+        "name": "PaymentService",
+        "baseUrl": "https://api.airline.internal/payments",
+        "operation": "chargeChangeFee",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "pnr":        { "type": "string" },
+            "session_id": { "type": "string" },
+            "amount":     { "type": "number" }
+          },
+          "required": ["pnr", "session_id", "amount"]
+        },
+        "outputSchema": { "type": "object" }
+      },
+      "position": { "x": 1160, "y": 360 }
+    },
+    {
+      "id": "payment_idempotency",
+      "type": "guardrail.idempotency",
+      "label": "Idempotency PNR+session",
+      "config": {
+        "keyFields": ["pnr", "session_id"],
+        "ttl": "24h"
+      },
+      "position": { "x": 1380, "y": 360 }
+    },
+    {
+      "id": "payment_confirm",
+      "type": "guardrail.confirm",
+      "label": "Confirm > USD 500",
+      "config": {
+        "threshold": "amount > 500",
+        "message": "El costo total supera USD 500. ¿Confirmas el cambio de vuelo?"
+      },
+      "position": { "x": 1380, "y": 500 }
+    },
+    {
+      "id": "payment_resilience",
+      "type": "guardrail.resilience",
+      "label": "Circuit Breaker Payment",
+      "config": {
+        "retries": 2,
+        "breakerThreshold": 0.5,
+        "fallbackMessage": "El servicio de pago no está disponible en este momento. Intenta en unos minutos."
+      },
+      "position": { "x": 1380, "y": 640 }
+    },
+    {
+      "id": "orchestrator",
+      "type": "agent.react",
+      "label": "Agente ReAct — Cambio de Vuelo",
+      "config": {
+        "system": "Eres un asistente experto en cambios de vuelo. Tu misión es ayudar al pasajero a rebooked su itinerario cumpliendo las políticas tarifarias. Flujo obligatorio: (1) Obtén el itinerario con ReservationService usando el PNR del token. (2) Consulta PolicyRAG para verificar penalidades según fare_class y route_type. (3) Busca vuelos alternativos con InventoryService. (4) Calcula el diferencial con PricingService. (5) Informa el costo total (penalidad + diferencia tarifaria) y solicita confirmación explícita. (6) Ejecuta el pago solo tras confirmar. Sé conciso, preciso y empático.",
+        "maxSteps": 10,
+        "streaming": true
+      },
+      "position": { "x": 700, "y": 300 }
+    },
+    {
+      "id": "audit",
+      "type": "observability.audit",
+      "label": "Audit Trail Kafka",
+      "config": {
+        "sink": "kafka",
+        "topic": "flight-change-audit"
+      },
+      "position": { "x": 940, "y": 180 }
+    },
+    {
+      "id": "chat_output",
+      "type": "io.output",
+      "label": "Chat Output",
+      "config": {
+        "format": "markdown",
+        "streaming": true
+      },
+      "position": { "x": 1160, "y": 180 }
+    }
+  ],
+  "edges": [
+    {
+      "source": "chat_input",
+      "sourcePort": "Message",
+      "target": "orchestrator",
+      "targetPort": "Message",
+      "loop": false
+    },
+    {
+      "source": "llm",
+      "sourcePort": "Model",
+      "target": "orchestrator",
+      "targetPort": "Model",
+      "loop": false
+    },
+    {
+      "source": "policy_pdf",
+      "sourcePort": "Documents",
+      "target": "policy_chunker",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "policy_chunker",
+      "sourcePort": "Documents",
+      "target": "policy_metadata",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "policy_metadata",
+      "sourcePort": "Documents",
+      "target": "policy_store",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "embedding_model",
+      "sourcePort": "Embeddings",
+      "target": "policy_store",
+      "targetPort": "Embeddings",
+      "loop": false
+    },
+    {
+      "source": "policy_store",
+      "sourcePort": "Retriever",
+      "target": "policy_tool",
+      "targetPort": "Retriever",
+      "loop": false
+    },
+    {
+      "source": "policy_tool",
+      "sourcePort": "Tool",
+      "target": "orchestrator",
+      "targetPort": "Tool",
+      "loop": false
+    },
+    {
+      "source": "reservation_tool",
+      "sourcePort": "Tool",
+      "target": "orchestrator",
+      "targetPort": "Tool",
+      "loop": false
+    },
+    {
+      "source": "inventory_tool",
+      "sourcePort": "Tool",
+      "target": "orchestrator",
+      "targetPort": "Tool",
+      "loop": false
+    },
+    {
+      "source": "pricing_tool",
+      "sourcePort": "Tool",
+      "target": "orchestrator",
+      "targetPort": "Tool",
+      "loop": false
+    },
+    {
+      "source": "payment_service",
+      "sourcePort": "Tool",
+      "target": "payment_idempotency",
+      "targetPort": "Tool",
+      "loop": false
+    },
+    {
+      "source": "payment_idempotency",
+      "sourcePort": "Tool",
+      "target": "payment_confirm",
+      "targetPort": "Tool",
+      "loop": false
+    },
+    {
+      "source": "payment_confirm",
+      "sourcePort": "Tool",
+      "target": "payment_resilience",
+      "targetPort": "Tool",
+      "loop": false
+    },
+    {
+      "source": "payment_resilience",
+      "sourcePort": "Tool",
+      "target": "orchestrator",
+      "targetPort": "Tool",
+      "loop": false
+    },
+    {
+      "source": "orchestrator",
+      "sourcePort": "Message",
+      "target": "audit",
+      "targetPort": "Any",
+      "loop": false
+    },
+    {
+      "source": "audit",
+      "sourcePort": "Any",
+      "target": "chat_output",
+      "targetPort": "Any",
+      "loop": false
+    },
+    {
+      "source": "orchestrator",
+      "sourcePort": "Message",
+      "target": "orchestrator",
+      "targetPort": "Message",
+      "loop": true
+    }
+  ],
+  "secrets": [
+    { "name": "ANTHROPIC_API_KEY",   "required": true,  "usedBy": ["llm"] },
+    { "name": "OPENAI_API_KEY",      "required": true,  "usedBy": ["embedding_model"] },
+    { "name": "DATABASE_URL",        "required": true,  "usedBy": ["policy_store"] },
+    { "name": "RESERVATION_API_KEY", "required": true,  "usedBy": ["reservation_tool"] },
+    { "name": "INVENTORY_API_KEY",   "required": true,  "usedBy": ["inventory_tool"] },
+    { "name": "PRICING_API_KEY",     "required": true,  "usedBy": ["pricing_tool"] },
+    { "name": "PAYMENT_API_KEY",     "required": true,  "usedBy": ["payment_service"] },
+    { "name": "KAFKA_BOOTSTRAP",     "required": true,  "usedBy": ["audit"] }
+  ]
+}

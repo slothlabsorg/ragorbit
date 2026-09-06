@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    name: verify (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      # No hay `pip install`: el engine es stdlib puro. Si algún día esto
+      # necesitara instalar algo, es que se rompió la promesa central.
+      - name: Verify the 10 templates (validate + generate + mock tests + real-code audit)
+        run: python3 tools/verify.py
+
+      - name: Full demo (e2e with real HTTP services + contract rejection)
+        run: python3 tools/demo.py
+
+      - name: Build the single-file zipapp and smoke-test it
+        run: python3 tools/build_pyz.py --out dist/ragorbit.pyz
+
+      - name: CLI works from a clean directory
+        run: |
+          mkdir -p /tmp/clean && cd /tmp/clean
+          cp "$GITHUB_WORKSPACE/dist/ragorbit.pyz" .
+          python3 ragorbit.pyz list-nodes | tail -2
+          python3 ragorbit.pyz validate "$GITHUB_WORKSPACE"/examples/*/flow.json
+
+  package:
+    name: sdist + wheel install cleanly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: python3 -m pip install --upgrade build
+      - run: python3 -m build
+
+      # Instala el wheel en un venv limpio: así se comprueba que el catálogo, la
+      # spec y las plantillas viajan como package-data. Es el fallo clásico —
+      # funciona desde el repo y se rompe instalado.
+      - name: Install the wheel in a clean venv and use it
+        run: |
+          python3 -m venv /tmp/venv
+          /tmp/venv/bin/pip install dist/*.whl
+          cd /tmp                     # fuera del repo, para no leer el catálogo del checkout
+          /tmp/venv/bin/ragorbit list-nodes | tail -2
+          /tmp/venv/bin/ragorbit list-nodes | grep -q "Total: 53" \
+            || { echo "::error::el catálogo no viajó en el wheel"; exit 1; }
+          /tmp/venv/bin/ragorbit generate \
+            "$GITHUB_WORKSPACE/examples/01-airline-flight-change/flow.json" --out /tmp/artifact
+          test -f /tmp/artifact/app/engine.py \
+            || { echo "::error::las plantillas no viajaron en el wheel"; exit 1; }
+          cd /tmp/artifact && python3 -m unittest discover -s tests

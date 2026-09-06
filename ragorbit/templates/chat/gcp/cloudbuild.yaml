@@ -1,0 +1,49 @@
+# Cloud Build: construye y despliega chat + mock-services en Cloud Run.
+# Ejecutar desde la raíz del artefacto:
+#   gcloud builds submit --config gcp/cloudbuild.yaml --substitutions=_REGION=us-central1
+substitutions:
+  _REGION: us-central1
+  _REPO: ragorbit
+  _APP_SERVICE: {{FLOW_ID}}-chat
+  _SVC_SERVICE: {{FLOW_ID}}-services
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile.services
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SVC_SERVICE}:$SHORT_SHA
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_APP_SERVICE}:$SHORT_SHA
+      - .
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        gcloud run deploy ${_SVC_SERVICE} \
+          --image ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SVC_SERVICE}:$SHORT_SHA \
+          --region ${_REGION} --port 8080 --allow-unauthenticated \
+          --set-env-vars RAGORBIT_HOST=0.0.0.0,PORT=8080
+        SVC_URL=$$(gcloud run services describe ${_SVC_SERVICE} --region ${_REGION} --format='value(status.url)')
+        gcloud run deploy ${_APP_SERVICE} \
+          --image ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_APP_SERVICE}:$SHORT_SHA \
+          --region ${_REGION} --port 8000 --allow-unauthenticated \
+          --set-env-vars MOCK=false,INTEGRATION=true,FLOW_ID={{FLOW_ID}},SERVICES_BASE=$$SVC_URL,PORT=8000
+        echo "Chat URL: $$(gcloud run services describe ${_APP_SERVICE} --region ${_REGION} --format='value(status.url)')"
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SVC_SERVICE}:$SHORT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_APP_SERVICE}:$SHORT_SHA
+
+options:
+  logging: CLOUD_LOGGING_ONLY

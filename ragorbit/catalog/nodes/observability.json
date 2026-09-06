@@ -1,0 +1,75 @@
+[
+  {
+    "type": "observability.audit",
+    "category": "observability",
+    "title": "Observabilidad — Auditoría",
+    "description": "Persiste cada tool call + respuesta (Kafka/log) — trazabilidad regulatoria.",
+    "ports": {
+      "inputs": [
+        { "name": "Any", "type": "Any" }
+      ],
+      "outputs": [
+        { "name": "Any", "type": "Any" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "sink": { "type": "string", "enum": ["kafka", "log"], "default": "log", "title": "Destino de auditoría" },
+        "topic": { "type": "string", "title": "Topic Kafka (si sink=kafka)" }
+      }
+    },
+    "emitter": "observability.audit",
+    "mock": { "behavior": "audit" }
+  },
+  {
+    "type": "observability.feedback",
+    "category": "observability",
+    "title": "Observabilidad — Feedback loop",
+    "description": "Feedback loop: ingiere callbacks de transacción y labels útil/no-útil para métricas y fine-tune del reranker.",
+    "ports": {
+      "inputs": [
+        { "name": "Any", "type": "Any" }
+      ],
+      "outputs": [
+        { "name": "Any", "type": "Any" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "store": { "type": "string", "title": "Store de feedback (p.ej. nombre del índice o tabla)" },
+        "signals": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["thumbs"],
+          "title": "Señales de feedback (thumbs, txn_callback, etc.)"
+        }
+      }
+    },
+    "emitter": "observability.feedback",
+    "mock": { "behavior": "feedback" }
+  },
+  {
+    "type": "observability.metrics",
+    "category": "observability",
+    "title": "Observabilidad — Métricas",
+    "description": "Exporta métricas OpenTelemetry: throughput, auto-confirm vs. escalado, latencia.",
+    "ports": {
+      "inputs": [
+        { "name": "Any", "type": "Any" }
+      ],
+      "outputs": [
+        { "name": "Any", "type": "Any" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "exporter": { "type": "string", "default": "otlp", "title": "Exportador (p.ej. otlp, prometheus)" }
+      }
+    },
+    "emitter": "observability.metrics",
+    "mock": { "behavior": "metrics" }
+  }
+]

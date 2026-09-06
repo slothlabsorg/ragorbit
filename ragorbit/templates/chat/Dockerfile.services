@@ -1,0 +1,7 @@
+FROM python:3.12-slim
+WORKDIR /app
+COPY mocks/services/mock_services.py /app/mock_services.py
+ENV PORT=8080
+ENV RAGORBIT_HOST=0.0.0.0
+EXPOSE 8080
+CMD ["python", "mock_services.py"]

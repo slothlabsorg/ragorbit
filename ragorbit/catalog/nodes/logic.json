@@ -1,0 +1,114 @@
+[
+  {
+    "type": "logic.prompt",
+    "category": "logic",
+    "title": "Síntesis con LLM",
+    "description": "Síntesis con LLM a partir de chunks y contexto. Genera una respuesta Message.",
+    "ports": {
+      "inputs": [
+        { "name": "Model", "type": "Model" },
+        { "name": "Chunks", "type": "Chunks" },
+        { "name": "Message", "type": "Message" }
+      ],
+      "outputs": [{ "name": "Message", "type": "Message" }]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "template": { "type": "string", "title": "Plantilla de prompt" },
+        "system": { "type": "string", "title": "System prompt" }
+      }
+    },
+    "emitter": "logic.prompt",
+    "mock": { "behavior": "prompt" }
+  },
+  {
+    "type": "logic.structured",
+    "category": "logic",
+    "title": "Salida Estructurada",
+    "description": "Salida estructurada con esquema JSON (p.ej. criterio de crédito, veredicto). Puede exigir citas obligatorias.",
+    "ports": {
+      "inputs": [
+        { "name": "Model", "type": "Model" },
+        { "name": "Chunks", "type": "Chunks" },
+        { "name": "Context", "type": "Any", "multi": true }
+      ],
+      "outputs": [{ "name": "Decision", "type": "Decision" }]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "schema": { "type": "object", "title": "JSON Schema de salida" },
+        "requireCitations": { "type": "boolean", "default": false, "title": "Exigir citas" }
+      }
+    },
+    "emitter": "logic.structured",
+    "mock": { "behavior": "structured" }
+  },
+  {
+    "type": "logic.rules",
+    "category": "logic",
+    "title": "Reglas Deterministas",
+    "description": "Reglas deterministas (auto-confirm, segmentación). Sin LLM. Evalúa condiciones when→then.",
+    "ports": {
+      "inputs": [{ "name": "Any", "type": "Any" }],
+      "outputs": [{ "name": "Decision", "type": "Decision" }]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": { "type": "object" },
+          "title": "Reglas (when→then)"
+        },
+        "else": { "type": "string", "title": "Acción por defecto" }
+      }
+    },
+    "emitter": "logic.rules",
+    "mock": { "behavior": "rules" }
+  },
+  {
+    "type": "logic.router",
+    "category": "logic",
+    "title": "Router de Flujo",
+    "description": "Bifurca el flujo según una condición o decisión. Produce salidas Any nombradas por rama.",
+    "ports": {
+      "inputs": [{ "name": "Decision", "type": "Decision" }],
+      "outputs": [{ "name": "Any", "type": "Any", "multi": true }]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "branches": {
+          "type": "array",
+          "items": { "type": "object" },
+          "title": "Ramas (condición→destino)"
+        }
+      }
+    },
+    "emitter": "logic.router",
+    "mock": { "behavior": "router" }
+  },
+  {
+    "type": "logic.citations",
+    "category": "logic",
+    "title": "Garantía de Citas",
+    "description": "Garantiza que cada afirmación cite su fuente; rechaza respuestas sin cita.",
+    "ports": {
+      "inputs": [
+        { "name": "Message", "type": "Message" },
+        { "name": "Chunks", "type": "Chunks" }
+      ],
+      "outputs": [{ "name": "Message", "type": "Message" }]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "mode": { "type": "string", "enum": ["enforce", "annotate"], "default": "enforce", "title": "Modo de citas" }
+      }
+    },
+    "emitter": "logic.citations",
+    "mock": { "behavior": "citations" }
+  }
+]

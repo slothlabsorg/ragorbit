@@ -1,0 +1,46 @@
+# DEMO con servicios + Kafka REAL. Para verlo sin instalar nada usa el camino stdlib:
+#     python3 demo/run_demo.py
+# Con docker (auditoría en Kafka de verdad):
+#     cd demo && docker compose up --build
+# Reusa el Dockerfile del e2e (mismo código). Contexto de build = raíz del repo.
+services:
+  kafka:
+    image: redpandadata/redpanda:latest
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --overprovisioned
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://kafka:9092
+    ports: ["9092:9092"]
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  services:
+    build: { context: .., dockerfile: e2e/airline-chat/Dockerfile }
+    command: python e2e/airline-chat/services/mock_services.py 8900
+    environment: [ RAGORBIT_HOST=0.0.0.0 ]
+    ports: ["8900:8900"]
+
+  # Consume el topic flight.audit y muestra los eventos [AUDIT] — así "ves" la auditoría en Kafka.
+  audit-consumer:
+    build: { context: .., dockerfile: e2e/airline-chat/Dockerfile }
+    command: python e2e/airline-chat/audit_consumer.py
+    environment: [ KAFKA_BROKER=kafka:9092 ]
+    depends_on:
+      kafka: { condition: service_healthy }
+
+  # La demo de 2 turnos contra los servicios, publicando auditoría a Kafka.
+  demo:
+    build: { context: .., dockerfile: e2e/airline-chat/Dockerfile }
+    command: python demo/run_demo.py
+    environment:
+      - SERVICES_BASE=http://services:8900
+      - KAFKA_BROKER=kafka:9092
+    depends_on:
+      kafka: { condition: service_healthy }
+      services: { condition: service_started }

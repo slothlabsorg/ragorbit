@@ -1,0 +1,123 @@
+[
+  {
+    "type": "store.pgvector",
+    "category": "store",
+    "title": "Postgres + pgvector",
+    "description": "Almacena documentos y embeddings en Postgres con extensión pgvector.",
+    "ports": {
+      "inputs": [
+        { "name": "Documents", "type": "Documents" },
+        { "name": "Embeddings", "type": "Embeddings" }
+      ],
+      "outputs": [
+        { "name": "Retriever", "type": "Retriever" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "index": { "type": "string", "title": "Nombre del índice" },
+        "distance": { "type": "string", "enum": ["cosine", "l2", "inner_product"], "default": "cosine", "title": "Métrica de distancia" }
+      }
+    },
+    "secrets": ["DATABASE_URL"],
+    "emitter": "store.pgvector",
+    "mock": { "behavior": "build_store" }
+  },
+  {
+    "type": "store.qdrant",
+    "category": "store",
+    "title": "Qdrant",
+    "description": "Almacena documentos y embeddings en Qdrant.",
+    "ports": {
+      "inputs": [
+        { "name": "Documents", "type": "Documents" },
+        { "name": "Embeddings", "type": "Embeddings" }
+      ],
+      "outputs": [
+        { "name": "Retriever", "type": "Retriever" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "collection": { "type": "string", "title": "Nombre de la colección" }
+      }
+    },
+    "secrets": ["QDRANT_URL", "QDRANT_API_KEY"],
+    "emitter": "store.qdrant",
+    "mock": { "behavior": "build_store" }
+  },
+  {
+    "type": "store.chroma",
+    "category": "store",
+    "title": "Chroma",
+    "description": "Almacena documentos y embeddings en Chroma (local, ideal para demos).",
+    "ports": {
+      "inputs": [
+        { "name": "Documents", "type": "Documents" },
+        { "name": "Embeddings", "type": "Embeddings" }
+      ],
+      "outputs": [
+        { "name": "Retriever", "type": "Retriever" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "collection": { "type": "string", "default": "default", "title": "Nombre de la colección" }
+      }
+    },
+    "emitter": "store.chroma",
+    "mock": { "behavior": "build_store" }
+  },
+  {
+    "type": "store.neo4j",
+    "category": "store",
+    "title": "Neo4j (Knowledge Graph)",
+    "description": "Knowledge Graph para GraphRAG: nodos entidad/chunk (text+embedding) y relaciones tipadas.",
+    "ports": {
+      "inputs": [
+        { "name": "Documents", "type": "Documents" },
+        { "name": "Embeddings", "type": "Embeddings" }
+      ],
+      "outputs": [
+        { "name": "Retriever", "type": "Retriever" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "database": { "type": "string", "default": "neo4j", "title": "Base de datos" },
+        "entitySchema": { "type": "string", "title": "Esquema de entidades" },
+        "buildRelations": { "type": "boolean", "default": true, "title": "Construir relaciones" }
+      }
+    },
+    "secrets": ["NEO4J_URI", "NEO4J_AUTH"],
+    "emitter": "store.neo4j",
+    "mock": { "behavior": "build_store" }
+  },
+  {
+    "type": "store.multi-index",
+    "category": "store",
+    "title": "Multi-index",
+    "description": "Agrupa varios índices nombrados para routing entre múltiples stores.",
+    "ports": {
+      "inputs": [
+        { "name": "Retriever", "type": "Retriever", "multi": true },
+        { "name": "Documents", "type": "Documents", "multi": true }
+      ],
+      "outputs": [
+        { "name": "Retriever", "type": "Retriever" }
+      ]
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "indexes": { "type": "array", "items": { "type": "string" }, "default": [], "title": "Nombres de índices (p.ej. policy, procedure, faq)" }
+      }
+    },
+    "emitter": "store.multi-index",
+    "mock": { "behavior": "build_store" }
+  }
+]

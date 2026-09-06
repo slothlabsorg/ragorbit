@@ -1,0 +1,489 @@
+{
+  "irVersion": "1.0",
+  "flow": {
+    "id": "legal-contract-review",
+    "name": "Revisión de contratos contra playbook",
+    "description": "El usuario sube o referencia un contrato y pregunta por riesgos. El sistema recupera cláusulas relevantes del playbook, normativa y precedentes, y devuelve hallazgos estructurados con nivel de riesgo y citas duales (contrato + fuente de referencia).",
+    "deploymentTarget": "chat-service",
+    "defaults": { "llm": "anthropic:claude-opus-4-8" }
+  },
+  "nodes": [
+    {
+      "id": "chat_input",
+      "type": "io.input",
+      "label": "Chat — Abogado / Analista Legal",
+      "config": {
+        "channel": "chat",
+        "auth": "jwt",
+        "streaming": true
+      },
+      "position": { "x": 60, "y": 400 }
+    },
+
+    {
+      "id": "contract_pdf",
+      "type": "loader.pdf",
+      "label": "Contrato bajo revisión (PDF)",
+      "config": {
+        "path": "data/contracts/incoming",
+        "ocr": false
+      },
+      "position": { "x": 60, "y": 640 }
+    },
+    {
+      "id": "contract_chunker",
+      "type": "ingest.chunker",
+      "label": "Chunker by-clause — Contrato",
+      "config": {
+        "strategy": "by-clause",
+        "chunkSize": 900,
+        "overlap": 120
+      },
+      "position": { "x": 300, "y": 640 }
+    },
+    {
+      "id": "embedding_model",
+      "type": "model.embedding",
+      "label": "Modelo de Embedding",
+      "config": {
+        "model": "text-embedding-3-large",
+        "local": false,
+        "apiKeyRef": "OPENAI_API_KEY"
+      },
+      "position": { "x": 540, "y": 500 }
+    },
+    {
+      "id": "contract_store",
+      "type": "store.pgvector",
+      "label": "Store — Contrato",
+      "config": {
+        "index": "contract",
+        "distance": "cosine"
+      },
+      "position": { "x": 540, "y": 640 }
+    },
+    {
+      "id": "contract_retrieval",
+      "type": "retrieval.vector",
+      "label": "Retrieval — Cláusulas del Contrato",
+      "config": {
+        "topK": 6,
+        "hardFilters": []
+      },
+      "position": { "x": 760, "y": 640 }
+    },
+
+    {
+      "id": "playbook_pdf",
+      "type": "loader.pdf",
+      "label": "Playbook — Cláusulas estándar aprobadas",
+      "config": {
+        "path": "data/kb/playbook",
+        "ocr": false
+      },
+      "position": { "x": 60, "y": 860 }
+    },
+    {
+      "id": "playbook_chunker",
+      "type": "ingest.chunker",
+      "label": "Chunker by-clause — Playbook",
+      "config": {
+        "strategy": "by-clause",
+        "chunkSize": 900,
+        "overlap": 120
+      },
+      "position": { "x": 300, "y": 860 }
+    },
+    {
+      "id": "playbook_store",
+      "type": "store.pgvector",
+      "label": "Store — Playbook",
+      "config": {
+        "index": "playbook",
+        "distance": "cosine"
+      },
+      "position": { "x": 540, "y": 860 }
+    },
+
+    {
+      "id": "regulations_pdf",
+      "type": "loader.pdf",
+      "label": "Normativa (PDF)",
+      "config": {
+        "path": "data/kb/regulations",
+        "ocr": false
+      },
+      "position": { "x": 60, "y": 1020 }
+    },
+    {
+      "id": "regulations_chunker",
+      "type": "ingest.chunker",
+      "label": "Chunker by-clause — Normativa",
+      "config": {
+        "strategy": "by-clause",
+        "chunkSize": 900,
+        "overlap": 120
+      },
+      "position": { "x": 300, "y": 1020 }
+    },
+    {
+      "id": "regulations_store",
+      "type": "store.pgvector",
+      "label": "Store — Normativa",
+      "config": {
+        "index": "regulations",
+        "distance": "cosine"
+      },
+      "position": { "x": 540, "y": 1020 }
+    },
+
+    {
+      "id": "precedent_pdf",
+      "type": "loader.pdf",
+      "label": "Contratos precedentes (PDF)",
+      "config": {
+        "path": "data/kb/precedent",
+        "ocr": false
+      },
+      "position": { "x": 60, "y": 1180 }
+    },
+    {
+      "id": "precedent_chunker",
+      "type": "ingest.chunker",
+      "label": "Chunker by-clause — Precedentes",
+      "config": {
+        "strategy": "by-clause",
+        "chunkSize": 900,
+        "overlap": 120
+      },
+      "position": { "x": 300, "y": 1180 }
+    },
+    {
+      "id": "precedent_store",
+      "type": "store.pgvector",
+      "label": "Store — Precedentes",
+      "config": {
+        "index": "precedent",
+        "distance": "cosine"
+      },
+      "position": { "x": 540, "y": 1180 }
+    },
+
+    {
+      "id": "multi_index",
+      "type": "store.multi-index",
+      "label": "Multi-Index KB (playbook / regulations / precedent)",
+      "config": {
+        "indexes": ["playbook", "regulations", "precedent"]
+      },
+      "position": { "x": 780, "y": 1020 }
+    },
+
+    {
+      "id": "router",
+      "type": "retrieval.router",
+      "label": "Router por Intent / Keyword",
+      "config": {
+        "rules": [
+          { "keyword": "indemniz",         "index": "playbook"    },
+          { "keyword": "responsabilid",    "index": "playbook"    },
+          { "keyword": "penalidad",        "index": "playbook"    },
+          { "keyword": "regulacion",       "index": "regulations" },
+          { "keyword": "cumplimiento",     "index": "regulations" },
+          { "keyword": "normativa",        "index": "regulations" },
+          { "keyword": "precedente",       "index": "precedent"   },
+          { "keyword": "contrato similar", "index": "precedent"   }
+        ],
+        "fallback": "playbook"
+      },
+      "position": { "x": 1020, "y": 1020 }
+    },
+
+    {
+      "id": "reranker",
+      "type": "retrieval.reranker",
+      "label": "Reranker top-3",
+      "config": {
+        "model": "bge-reranker",
+        "topN": 3
+      },
+      "position": { "x": 1260, "y": 820 }
+    },
+
+    {
+      "id": "llm",
+      "type": "model.llm",
+      "label": "Claude Opus 4.8",
+      "config": {
+        "model": "anthropic:claude-opus-4-8",
+        "temperature": 0.1,
+        "apiKeyRef": "ANTHROPIC_API_KEY"
+      },
+      "position": { "x": 1260, "y": 400 }
+    },
+
+    {
+      "id": "structured_findings",
+      "type": "logic.structured",
+      "label": "Hallazgos Estructurados",
+      "config": {
+        "schema": {
+          "type": "object",
+          "required": ["hallazgos"],
+          "properties": {
+            "hallazgos": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["clausula", "riesgo", "explicacion", "recomendacion"],
+                "properties": {
+                  "clausula": {
+                    "type": "string",
+                    "description": "Identificador o texto de la cláusula del contrato analizada"
+                  },
+                  "riesgo": {
+                    "type": "string",
+                    "enum": ["alto", "medio", "bajo"],
+                    "description": "Nivel de riesgo detectado"
+                  },
+                  "explicacion": {
+                    "type": "string",
+                    "description": "Explicación del riesgo con cita al playbook o regulación de referencia"
+                  },
+                  "recomendacion": {
+                    "type": "string",
+                    "description": "Acción recomendada para mitigar o renegociar la cláusula"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requireCitations": true
+      },
+      "position": { "x": 1500, "y": 620 }
+    },
+
+    {
+      "id": "citations_enforcer",
+      "type": "logic.citations",
+      "label": "Verificador de Citas Duales",
+      "config": {
+        "mode": "enforce"
+      },
+      "position": { "x": 1740, "y": 620 }
+    },
+
+    {
+      "id": "chat_output",
+      "type": "io.output",
+      "label": "Informe de Riesgos (Markdown)",
+      "config": {
+        "format": "markdown",
+        "streaming": true
+      },
+      "position": { "x": 1980, "y": 620 }
+    }
+  ],
+  "edges": [
+    {
+      "source": "contract_pdf",
+      "sourcePort": "Documents",
+      "target": "contract_chunker",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "contract_chunker",
+      "sourcePort": "Documents",
+      "target": "contract_store",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "embedding_model",
+      "sourcePort": "Embeddings",
+      "target": "contract_store",
+      "targetPort": "Embeddings",
+      "loop": false
+    },
+    {
+      "source": "contract_store",
+      "sourcePort": "Retriever",
+      "target": "contract_retrieval",
+      "targetPort": "Retriever",
+      "loop": false
+    },
+    {
+      "source": "chat_input",
+      "sourcePort": "Message",
+      "target": "contract_retrieval",
+      "targetPort": "Query",
+      "loop": false
+    },
+    {
+      "source": "contract_retrieval",
+      "sourcePort": "Chunks",
+      "target": "structured_findings",
+      "targetPort": "Chunks",
+      "loop": false
+    },
+
+    {
+      "source": "playbook_pdf",
+      "sourcePort": "Documents",
+      "target": "playbook_chunker",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "playbook_chunker",
+      "sourcePort": "Documents",
+      "target": "playbook_store",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "embedding_model",
+      "sourcePort": "Embeddings",
+      "target": "playbook_store",
+      "targetPort": "Embeddings",
+      "loop": false
+    },
+    {
+      "source": "regulations_pdf",
+      "sourcePort": "Documents",
+      "target": "regulations_chunker",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "regulations_chunker",
+      "sourcePort": "Documents",
+      "target": "regulations_store",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "embedding_model",
+      "sourcePort": "Embeddings",
+      "target": "regulations_store",
+      "targetPort": "Embeddings",
+      "loop": false
+    },
+    {
+      "source": "precedent_pdf",
+      "sourcePort": "Documents",
+      "target": "precedent_chunker",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "precedent_chunker",
+      "sourcePort": "Documents",
+      "target": "precedent_store",
+      "targetPort": "Documents",
+      "loop": false
+    },
+    {
+      "source": "embedding_model",
+      "sourcePort": "Embeddings",
+      "target": "precedent_store",
+      "targetPort": "Embeddings",
+      "loop": false
+    },
+
+    {
+      "source": "playbook_store",
+      "sourcePort": "Retriever",
+      "target": "multi_index",
+      "targetPort": "Retriever",
+      "loop": false
+    },
+    {
+      "source": "regulations_store",
+      "sourcePort": "Retriever",
+      "target": "multi_index",
+      "targetPort": "Retriever",
+      "loop": false
+    },
+    {
+      "source": "precedent_store",
+      "sourcePort": "Retriever",
+      "target": "multi_index",
+      "targetPort": "Retriever",
+      "loop": false
+    },
+
+    {
+      "source": "multi_index",
+      "sourcePort": "Retriever",
+      "target": "router",
+      "targetPort": "Retriever",
+      "loop": false
+    },
+    {
+      "source": "chat_input",
+      "sourcePort": "Message",
+      "target": "router",
+      "targetPort": "Query",
+      "loop": false
+    },
+    {
+      "source": "router",
+      "sourcePort": "Chunks",
+      "target": "reranker",
+      "targetPort": "Chunks",
+      "loop": false
+    },
+    {
+      "source": "reranker",
+      "sourcePort": "Chunks",
+      "target": "structured_findings",
+      "targetPort": "Chunks",
+      "loop": false
+    },
+
+    {
+      "source": "llm",
+      "sourcePort": "Model",
+      "target": "structured_findings",
+      "targetPort": "Model",
+      "loop": false
+    },
+    {
+      "source": "chat_input",
+      "sourcePort": "Message",
+      "target": "citations_enforcer",
+      "targetPort": "Message",
+      "loop": false
+    },
+    {
+      "source": "reranker",
+      "sourcePort": "Chunks",
+      "target": "citations_enforcer",
+      "targetPort": "Chunks",
+      "loop": false
+    },
+    {
+      "source": "citations_enforcer",
+      "sourcePort": "Message",
+      "target": "chat_output",
+      "targetPort": "Any",
+      "loop": false
+    },
+    {
+      "source": "structured_findings",
+      "sourcePort": "Decision",
+      "target": "chat_output",
+      "targetPort": "Any",
+      "loop": false
+    }
+  ],
+  "secrets": [
+    { "name": "ANTHROPIC_API_KEY", "required": true,  "usedBy": ["llm"] },
+    { "name": "OPENAI_API_KEY",    "required": true,  "usedBy": ["embedding_model"] },
+    { "name": "DATABASE_URL",      "required": true,  "usedBy": ["contract_store", "playbook_store", "regulations_store", "precedent_store"] },
+    { "name": "JWT_PUBLIC_KEY",    "required": true,  "usedBy": ["chat_input"] }
+  ]
+}
