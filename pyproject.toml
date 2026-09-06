@@ -1,6 +1,6 @@
 [project]
 name = "ragorbit"
-version = "1.0.0"
+version = "1.0.1"
 description = "Constructor visual de estrategias RAG/agénticas que genera artefactos Python desplegables, sin lock-in."
 readme = "README.md"
 requires-python = ">=3.10"
