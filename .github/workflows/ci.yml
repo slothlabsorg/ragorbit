@@ -21,6 +21,12 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
+      # Falla en 3.10/3.11 por una f-string que el intérprete de quien la escribió
+      # sí aceptaba. Se comprueba primero porque es un error de importación: sin
+      # esto, el fallo real queda enterrado en un traceback de otra cosa.
+      - name: Python 3.10 compatibility
+        run: python3 tools/check_py310.py
+
       # No hay `pip install`: el engine es stdlib puro. Si algún día esto
       # necesitara instalar algo, es que se rompió la promesa central.
       - name: Verify the 10 templates (validate + generate + mock tests + real-code audit)

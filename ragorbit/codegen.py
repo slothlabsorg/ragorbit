@@ -879,6 +879,10 @@ def _readme(flow: Dict[str, Any], target: str, secrets: List[str],
         "chat-service": "uvicorn app.main:app --port 8000",
         "event-worker": "python -m app.main        # consume del broker y procesa el lote",
     }.get(target, "python -m app.main        # corre el job")
+    # Fuera de la f-string: en Python 3.10/3.11 no se puede poner una barra
+    # invertida dentro de `{...}` (PEP 701 lo permitió solo desde 3.12).
+    secret_exports = "".join(f"export {s}=...   # tu credencial\n" for s in secrets)
+    secrets_block = secret_exports or "# (este flujo no requiere secretos)"
     pending = ""
     if missing:
         rows = "\n".join(f"- `{m}`" for m in missing)
@@ -908,7 +912,7 @@ El modo mock usa `runtime/` (stdlib) + `mocks/fixtures.json`. No requiere LLM ni
 ```bash
 pip install -e ".[real]"
 export MOCK=false
-{"".join(f"export {s}=...   # tu credencial\n" for s in secrets) or "# (este flujo no requiere secretos)"}
+{secrets_block}
 {run_real}
 ```
 
