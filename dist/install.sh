@@ -51,7 +51,10 @@ else
 fi
 
 mkdir -p "$LIB_DIR" "$BIN_DIR"
-info "Descargando $VERSION…"
+# Braces are required here: `$VERSION…` makes some shells read the ellipsis's
+# UTF-8 bytes as part of the variable name, which under `set -u` aborts the
+# install with "unbound variable".
+info "Descargando ${VERSION}…"
 $FETCH "$LIB_DIR/ragorbit.pyz.tmp" "$URL" || die "No se pudo descargar $URL"
 
 # Comprueba que lo descargado funciona ANTES de reemplazar lo que ya había: si el

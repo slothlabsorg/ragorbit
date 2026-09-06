@@ -27,6 +27,11 @@ jobs:
       - name: Python 3.10 compatibility
         run: python3 tools/check_py310.py
 
+      # The installer is served from slothlabs.org/install/ragorbit and runs
+      # under `sh`, so nothing else in this repo exercises it.
+      - name: Installer script is valid POSIX sh
+        run: python3 tools/check_install_sh.py
+
       # No hay `pip install`: el engine es stdlib puro. Si algún día esto
       # necesitara instalar algo, es que se rompió la promesa central.
       - name: Verify the 10 templates (validate + generate + mock tests + real-code audit)
