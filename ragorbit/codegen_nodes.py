@@ -486,16 +486,22 @@ def _emit_loader_multimodal(node: dict) -> NodeCode:
     path = _cfg(node, "path", "./data")
     scheme_tag = (f'\n        for doc in loaded:\n'
                   f'            doc.metadata["section_scheme"] = {_lit(scheme)}' if scheme else "")
+    # Fuera de la f-string: anidar el mismo tipo de comillas dentro de `{...}`
+    # solo es legal desde Python 3.12 (PEP 701), y el paquete soporta 3.10+.
+    tables_note = "tablas (infer_table_structure) " if extract_tables else ""
+    vision_note = ""
+    if describe_images:
+        vision_note = (
+            "\n\n    describeImages está activo: el OCR de hi_res ya aporta el texto de las"
+            "\n    imágenes. Para descripciones semánticas más ricas, pasa cada imagen por el"
+            "\n    nodo model.vision del flujo y concaténalas aquí."
+        )
     body = f'''    """loader.multimodal — PDFs e imágenes de {path}.
 
     `UnstructuredFileLoader` en modo elements con estrategia hi_res: extrae
-    texto, {"tablas (infer_table_structure) " if extract_tables else ""}y el OCR de las imágenes embebidas, cada
+    texto, {tables_note}y el OCR de las imágenes embebidas, cada
     elemento como su propio Document con su tipo en la metadata.
-    Requiere `pip install "unstructured[all-docs]"` + tesseract y poppler.{'''
-
-    describeImages está activo: el OCR de hi_res ya aporta el texto de las
-    imágenes. Para descripciones semánticas más ricas, pasa cada imagen por el
-    nodo model.vision del flujo y concaténalas aquí.''' if describe_images else ""}
+    Requiere `pip install "unstructured[all-docs]"` + tesseract y poppler.{vision_note}
     """
     root = Path({_lit(path)})
     patterns = ("*.pdf", "*.jpg", "*.jpeg", "*.png", "*.tiff")
